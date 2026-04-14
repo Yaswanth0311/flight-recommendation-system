@@ -8,71 +8,57 @@ st.markdown("""
 <style>
 .stApp {
     background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    color: white;
 }
 
-/* Container */
-.container {
-    background: rgba(255,255,255,0.06);
-    padding: 25px;
+/* Glass Card */
+.card {
+    background: rgba(255,255,255,0.07);
+    padding: 20px;
     border-radius: 15px;
-    backdrop-filter: blur(12px);
-    margin-top: 10px;
+    margin-bottom: 15px;
+    backdrop-filter: blur(10px);
 }
 
 /* Buttons */
 div.stButton > button {
     background: linear-gradient(90deg, #ff4b2b, #ff416c);
     color: white;
-    border-radius: 10px;
-    height: 45px;
-    width: 200px;
-    font-size: 16px;
+    border-radius: 8px;
+    height: 40px;
+    width: 180px;
 }
 
-/* Reduce top space */
-.block-container {
-    padding-top: 2rem;
+/* Center button */
+.center-btn {
+    display: flex;
+    justify-content: center;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- LOAD DATA ----------------
+# ---------------- DATA ----------------
 df = pd.read_csv("flights.csv")
 df["Date"] = pd.to_datetime(df["Date"]).dt.date
-
-# ---------------- HELPER ----------------
-def convert_duration(duration):
-    parts = duration.replace("h", "").replace("m", "").split()
-    if len(parts) == 2:
-        return int(parts[0]) * 60 + int(parts[1])
-    elif len(parts) == 1:
-        return int(parts[0]) * 60
-    return 0
 
 # ---------------- TITLE ----------------
 st.title("Flight Recommendation System")
 st.caption("Smart AI-based Flight Finder")
 
-# ---------------- INFO ----------------
 st.info(f"Available Dates: {df['Date'].min()} → {df['Date'].max()}")
 
-# ---------------- FILTER HEADER ----------------
+# ---------------- FILTERS ----------------
 col1, col2 = st.columns([8,2])
 
 with col1:
-    st.markdown("### Filters")
+    st.subheader("Filters")
 
 with col2:
-    clear = st.button("Clear Filters")
+    if st.button("Clear Filters"):
+        st.session_state.clear()
+        st.rerun()
 
-if clear:
-    st.session_state.clear()
-    st.rerun()
-
-# ---------------- FILTER CARD ----------------
-st.markdown("<div class='container'>", unsafe_allow_html=True)
-
-# ROW 1
+# FILTER GRID (NO EMPTY BAR NOW)
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -90,7 +76,6 @@ with col4:
         ["Select"] + sorted(df["Date"].astype(str).unique())
     )
 
-# ROW 2
 col5, col6, col7 = st.columns(3)
 
 with col5:
@@ -113,13 +98,18 @@ with col7:
         ["All", "Non-stop", "1 Stop", "2+ Stops"]
     )
 
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ---------------- SEARCH BUTTON ----------------
+# SEARCH BUTTON CENTER
 col1, col2, col3 = st.columns([1,2,1])
-
 with col2:
     search = st.button("Search Flights")
+
+# ---------------- LOGO MAPPING ----------------
+logos = {
+    "IndiGo": "https://upload.wikimedia.org/wikipedia/commons/0/0b/IndiGo_Logo.svg",
+    "Air India": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Air_India_Logo.svg",
+    "SpiceJet": "https://upload.wikimedia.org/wikipedia/commons/9/9b/SpiceJet_logo.svg",
+    "GoAir": "https://upload.wikimedia.org/wikipedia/commons/8/8e/Go_First_logo.svg"
+}
 
 # ---------------- SEARCH LOGIC ----------------
 if search:
@@ -143,7 +133,7 @@ if search:
         (data["Price"] <= price_range[1])
     ]
 
-    # ---------------- STOPS FILTER ----------------
+    # Stops filter
     if stops == "Non-stop":
         data = data[data["Stops"] == "non-stop"]
     elif stops == "1 Stop":
@@ -151,8 +141,8 @@ if search:
     elif stops == "2+ Stops":
         data = data[data["Stops"].isin(["2 stops", "3 stops"])]
 
-    # ---------------- SORT ----------------
-    data["Duration_Min"] = data["Duration"].apply(convert_duration)
+    # Sorting
+    data["Duration_Min"] = data["Duration"].str.extract(r'(\d+)').astype(int)
 
     if sort_option == "Cheapest":
         data = data.sort_values("Price")
@@ -165,33 +155,40 @@ if search:
         data = data.sort_values("Score")
 
     elif sort_option == "Premium":
-        premium_airlines = ["IndiGo", "Air India", "Vistara"]
-        data["Premium"] = data["Airline"].apply(
-            lambda x: 0 if x in premium_airlines else 1
-        )
+        premium = ["IndiGo", "Air India"]
+        data["Premium"] = data["Airline"].apply(lambda x: 0 if x in premium else 1)
         data = data.sort_values(["Premium", "Price"])
 
-    # ---------------- RESULT ----------------
+    # ---------------- RESULTS ----------------
     if not data.empty:
 
         st.success("Flights Found")
 
-        best = data.iloc[0]
+        for i, row in data.head(10).iterrows():
 
-        st.subheader("Best Flight")
+            logo_url = logos.get(row["Airline"], "")
 
-        st.markdown(f"""
-        <div class='container'>
-        Airline: {best['Airline']} <br>
-        Route: {best['Source']} → {best['Destination']} <br>
-        Price: ₹{best['Price']} <br>
-        Duration: {best['Duration']} <br>
-        Stops: {best['Stops']}
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class='card'>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
 
-        st.subheader("All Flights")
-        st.dataframe(data.reset_index(drop=True))
+                    <div>
+                        <img src="{logo_url}" width="80"><br>
+                        <b>{row['Airline']}</b><br>
+                        {row['Source']} → {row['Destination']}<br>
+                        {row['Duration']} | {row['Stops']}
+                    </div>
+
+                    <div style="text-align:right;">
+                        <h3>₹{row['Price']}</h3>
+                        <button style="background:#ff4b2b;color:white;border:none;padding:8px 15px;border-radius:6px;">
+                            Book Now
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     else:
         st.error("No flights found")
