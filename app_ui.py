@@ -3,20 +3,20 @@ import pandas as pd
 
 st.set_page_config(layout="wide")
 
-# ---------------- UI STYLE ----------------
+# ---------------- STYLE ----------------
 st.markdown("""
 <style>
 .stApp {
     background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
 }
 
-/* Glass container */
+/* Container */
 .container {
     background: rgba(255,255,255,0.06);
     padding: 25px;
     border-radius: 15px;
     backdrop-filter: blur(12px);
-    margin-top: 20px;
+    margin-top: 10px;
 }
 
 /* Buttons */
@@ -27,10 +27,9 @@ div.stButton > button {
     height: 45px;
     width: 200px;
     font-size: 16px;
-    margin-top: 10px;
 }
 
-/* Remove unwanted spacing */
+/* Reduce top space */
 .block-container {
     padding-top: 2rem;
 }
@@ -57,17 +56,23 @@ st.caption("Smart AI-based Flight Finder")
 # ---------------- INFO ----------------
 st.info(f"Available Dates: {df['Date'].min()} → {df['Date'].max()}")
 
-# ---------------- CLEAR BUTTON ----------------
-col1, col2 = st.columns([9,1])
+# ---------------- FILTER HEADER ----------------
+col1, col2 = st.columns([8,2])
+
+with col1:
+    st.markdown("### Filters")
+
 with col2:
-    if st.button("Clear"):
-        st.session_state.clear()
-        st.rerun()
+    clear = st.button("Clear Filters")
+
+if clear:
+    st.session_state.clear()
+    st.rerun()
 
 # ---------------- FILTER CARD ----------------
 st.markdown("<div class='container'>", unsafe_allow_html=True)
 
-# TOP ROW
+# ROW 1
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -85,7 +90,7 @@ with col4:
         ["Select"] + sorted(df["Date"].astype(str).unique())
     )
 
-# SECOND ROW
+# ROW 2
 col5, col6, col7 = st.columns(3)
 
 with col5:
@@ -110,12 +115,13 @@ with col7:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- CENTER BUTTON ----------------
+# ---------------- SEARCH BUTTON ----------------
 col1, col2, col3 = st.columns([1,2,1])
+
 with col2:
     search = st.button("Search Flights")
 
-# ---------------- SEARCH ----------------
+# ---------------- SEARCH LOGIC ----------------
 if search:
 
     data = df.copy()
