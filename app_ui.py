@@ -11,13 +11,6 @@ st.set_page_config(page_title="Flight App", layout="wide")
 # -----------------------------
 st.markdown("""
 <style>
-.card {
-    background: rgba(255,255,255,0.05);
-    padding:20px;
-    border-radius:12px;
-    margin-bottom:15px;
-}
-
 .metric {
     background: rgba(255,255,255,0.05);
     padding:15px;
@@ -39,7 +32,6 @@ st.markdown("""
 # -----------------------------
 df = pd.read_csv("flights.csv")
 
-# Fix missing columns
 if "Stops" not in df.columns:
     df["Stops"] = "non-stop"
 
@@ -51,28 +43,18 @@ def get_offer(row):
     stops = str(row["Stops"]).lower()
     airline = row["Airline"]
 
-    discount = 0
-    tag = ""
+    discount = 200
+    tag = "Offer"
 
-    if price > 6000:
-        discount = 800
-        tag = "Super Saver"
-    elif price > 4000:
+    if price > 5000:
         discount = 500
         tag = "Best Deal"
-    else:
-        discount = 200
-        tag = "Budget"
 
     if "non" in stops:
         discount += 150
         tag = "Non-stop Special"
 
-    if airline == "IndiGo":
-        discount += 100
-        tag = "IndiGo Offer"
-
-    final_price = max(price - discount, int(price * 0.5))
+    final_price = price - discount
     return discount, final_price, tag
 
 # -----------------------------
@@ -100,7 +82,7 @@ col1, col2, col3, col4 = st.columns(4)
 source = col1.selectbox("From", ["Select"] + sorted(df["Source"].unique()))
 destination = col2.selectbox("To", ["Select"] + sorted(df["Destination"].unique()))
 airline = col3.selectbox("Airline", ["All"] + sorted(df["Airline"].unique()))
-sort = col4.selectbox("Sort By", ["Cheapest", "Fastest", "Premium"])
+sort = col4.selectbox("Sort By", ["Cheapest", "Premium"])
 
 price_range = st.slider(
     "Price Range",
@@ -108,8 +90,6 @@ price_range = st.slider(
     int(df["Price"].max()),
     (2000, 15000)
 )
-
-st.write("")
 
 search = st.button("Search Flights")
 
@@ -133,7 +113,7 @@ if search:
         (data["Price"] <= price_range[1])
     ]
 
-    # SORTING
+    # SORT
     if sort == "Cheapest":
         data = data.sort_values("Price")
     elif sort == "Premium":
@@ -142,43 +122,23 @@ if search:
     st.success("Flights Found")
 
     # -----------------------------
-    # CARDS (IMPORTANT FIX HERE)
+    # SIMPLE CLEAN CARDS (NO HTML BUG)
     # -----------------------------
     for i, row in data.head(20).iterrows():
 
         discount, final_price, tag = get_offer(row)
 
-        st.markdown(f"""
-        <div class='card'>
-            <div style="display:flex; justify-content:space-between;">
+        st.subheader(f"{row['Airline']} | {row['Source']} → {row['Destination']}")
 
-                <div>
-                    <b>{row['Airline']}</b><br>
-                    {row['Source']} → {row['Destination']}<br>
-                    {row['Duration']} | {row['Stops']}<br><br>
+        st.write(f"Duration: {row['Duration']} | {row['Stops']}")
+        st.write(f"Offer: {tag} | ₹{discount} OFF")
 
-                    <span style="background:#ff4b2b;padding:4px 10px;border-radius:6px;font-size:12px;">
-                        {tag}
-                    </span><br><br>
-
-                    <span style="color:#00ff9d;">
-                        ₹{discount} OFF
-                    </span>
-                </div>
-
-                <div style="text-align:right;">
-                    <p style="text-decoration:line-through;">
-                        ₹{row['Price']}
-                    </p>
-                    <h2>₹{final_price}</h2>
-                </div>
-
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.write(f"~~₹{row['Price']}~~  →  ₹{final_price}")
 
         if st.button("Book Now", key=f"book_{i}"):
-            st.success(f"{row['Airline']} booked at ₹{final_price}")
+            st.success(f"Booked {row['Airline']} at ₹{final_price}")
+
+        st.write("---")
 
 else:
     st.info("Select filters and click Search Flights")
