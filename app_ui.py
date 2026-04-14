@@ -3,20 +3,23 @@ import pandas as pd
 
 st.set_page_config(layout="wide")
 
-# ---------------- BACKGROUND ----------------
+# ---------------- UI STYLE ----------------
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.95));
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
 }
 
-.glass {
+/* Glass container */
+.container {
     background: rgba(255,255,255,0.06);
-    padding: 20px;
+    padding: 25px;
     border-radius: 15px;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
+    margin-top: 20px;
 }
 
+/* Buttons */
 div.stButton > button {
     background: linear-gradient(90deg, #ff4b2b, #ff416c);
     color: white;
@@ -24,8 +27,13 @@ div.stButton > button {
     height: 45px;
     width: 200px;
     font-size: 16px;
+    margin-top: 10px;
 }
 
+/* Remove unwanted spacing */
+.block-container {
+    padding-top: 2rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -44,55 +52,42 @@ def convert_duration(duration):
 
 # ---------------- TITLE ----------------
 st.title("Flight Recommendation System")
-st.subheader("Smart AI-based Flight Finder")
+st.caption("Smart AI-based Flight Finder")
 
-# ---------------- DATE RANGE ----------------
+# ---------------- INFO ----------------
 st.info(f"Available Dates: {df['Date'].min()} → {df['Date'].max()}")
 
 # ---------------- CLEAR BUTTON ----------------
-col1, col2 = st.columns([8,2])
+col1, col2 = st.columns([9,1])
 with col2:
-    if st.button("Clear Filters"):
+    if st.button("Clear"):
         st.session_state.clear()
         st.rerun()
 
 # ---------------- FILTER CARD ----------------
-st.markdown("<div class='glass'>", unsafe_allow_html=True)
+st.markdown("<div class='container'>", unsafe_allow_html=True)
 
+# TOP ROW
 col1, col2, col3, col4 = st.columns(4)
 
-# SOURCE
 with col1:
-    source = st.selectbox(
-        "From",
-        ["Select"] + sorted(df["Source"].unique())
-    )
+    source = st.selectbox("From", ["Select"] + sorted(df["Source"].unique()))
 
-# DESTINATION
 with col2:
-    destination = st.selectbox(
-        "To",
-        ["Select"] + sorted(df["Destination"].unique())
-    )
+    destination = st.selectbox("To", ["Select"] + sorted(df["Destination"].unique()))
 
-# AIRLINE
 with col3:
-    airline = st.selectbox(
-        "Airline",
-        ["All"] + sorted(df["Airline"].unique())
-    )
+    airline = st.selectbox("Airline", ["All"] + sorted(df["Airline"].unique()))
 
-# DATE
 with col4:
     travel_date = st.selectbox(
-        "Travel Date",
+        "Date",
         ["Select"] + sorted(df["Date"].astype(str).unique())
     )
 
-# ---------------- EXTRA FILTERS ----------------
-col5, col6 = st.columns(2)
+# SECOND ROW
+col5, col6, col7 = st.columns(3)
 
-# PRICE
 with col5:
     price_range = st.slider(
         "Price Range",
@@ -101,13 +96,13 @@ with col5:
         (int(df["Price"].min()), int(df["Price"].max()))
     )
 
-# SORT + STOPS
 with col6:
     sort_option = st.selectbox(
         "Sort By",
-        ["Cheapest", "Fastest"]
+        ["Cheapest", "Fastest", "Best Value", "Premium"]
     )
 
+with col7:
     stops = st.selectbox(
         "Stops",
         ["All", "Non-stop", "1 Stop", "2+ Stops"]
@@ -120,7 +115,7 @@ col1, col2, col3 = st.columns([1,2,1])
 with col2:
     search = st.button("Search Flights")
 
-# ---------------- SEARCH LOGIC ----------------
+# ---------------- SEARCH ----------------
 if search:
 
     data = df.copy()
@@ -150,34 +145,46 @@ if search:
     elif stops == "2+ Stops":
         data = data[data["Stops"].isin(["2 stops", "3 stops"])]
 
-    # ---------------- SORTING ----------------
+    # ---------------- SORT ----------------
     data["Duration_Min"] = data["Duration"].apply(convert_duration)
 
     if sort_option == "Cheapest":
         data = data.sort_values("Price")
-    else:
+
+    elif sort_option == "Fastest":
         data = data.sort_values("Duration_Min")
 
-    # ---------------- RESULTS ----------------
+    elif sort_option == "Best Value":
+        data["Score"] = data["Price"] * 0.7 + data["Duration_Min"] * 0.3
+        data = data.sort_values("Score")
+
+    elif sort_option == "Premium":
+        premium_airlines = ["IndiGo", "Air India", "Vistara"]
+        data["Premium"] = data["Airline"].apply(
+            lambda x: 0 if x in premium_airlines else 1
+        )
+        data = data.sort_values(["Premium", "Price"])
+
+    # ---------------- RESULT ----------------
     if not data.empty:
 
         st.success("Flights Found")
 
         best = data.iloc[0]
 
-        st.subheader("Best Flight Recommendation")
+        st.subheader("Best Flight")
 
         st.markdown(f"""
-        <div class='glass'>
+        <div class='container'>
         Airline: {best['Airline']} <br>
+        Route: {best['Source']} → {best['Destination']} <br>
         Price: ₹{best['Price']} <br>
         Duration: {best['Duration']} <br>
-        Stops: {best['Stops']} <br>
-        Date: {best['Date']}
+        Stops: {best['Stops']}
         </div>
         """, unsafe_allow_html=True)
 
-        st.subheader("Other Flights")
+        st.subheader("All Flights")
         st.dataframe(data.reset_index(drop=True))
 
     else:
