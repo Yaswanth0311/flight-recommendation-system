@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import random
 
 st.set_page_config(page_title="Flight App", layout="wide")
 
@@ -109,17 +108,14 @@ with tab1:
 
         st.success("Flights Found")
 
-        # Save recent
+        # Save recent searches
         st.session_state.recent_searches.insert(0, f"{source} → {destination}")
         st.session_state.recent_searches = st.session_state.recent_searches[:5]
 
         # -----------------------------
-        # RESULT CARDS (FIXED)
+        # RESULT CARDS (CLEAN)
         # -----------------------------
         for i, row in data.head(10).iterrows():
-
-            discount = random.randint(200, 800)
-            final_price = int(row["Price"]) - discount
 
             duration = row["Duration"] if "Duration" in data.columns else "N/A"
             stops = row["Stops"] if "Stops" in data.columns else row.get("Total_Stops", "N/A")
@@ -138,27 +134,11 @@ with tab1:
                     <h4 style="margin:0;">{row['Airline']}</h4>
                     <p style="margin:0;">{row['Source']} → {row['Destination']}</p>
                     <p style="margin:0;">{duration} | {stops}</p>
-
-                    <span style="
-                        background:#ff4b2b;
-                        padding:4px 10px;
-                        border-radius:6px;
-                        font-size:12px;
-                    ">
-                        OFFER
-                    </span>
-
-                    <p style="color:#00ff9d;margin:5px 0;">
-                        ₹{discount} OFF
-                    </p>
                 </div>
 
                 <div style="text-align:right;">
-                    <p style="text-decoration:line-through;margin:0;">
-                        ₹{int(row['Price'])}
-                    </p>
                     <h2 style="margin:0;">
-                        ₹{final_price}
+                        ₹{int(row['Price'])}
                     </h2>
                 </div>
             </div>
