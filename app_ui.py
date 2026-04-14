@@ -19,8 +19,23 @@ df["Date"] = pd.to_datetime(df["Date"]).dt.date
 if "recent_searches" not in st.session_state:
     st.session_state.recent_searches = []
 
+if "source" not in st.session_state:
+    st.session_state.source = "Select All"
+
+if "destination" not in st.session_state:
+    st.session_state.destination = "Select All"
+
+if "airline" not in st.session_state:
+    st.session_state.airline = "Select All"
+
+if "sort" not in st.session_state:
+    st.session_state.sort = "Select"
+
+if "date" not in st.session_state:
+    st.session_state.date = "Select All"
+
 # -----------------------------
-# CLEAR FILTER FUNCTION
+# CLEAR FILTERS
 # -----------------------------
 def clear_filters():
     st.session_state.source = "Select All"
@@ -52,26 +67,41 @@ with tab1:
     airlines = ["Select All"] + sorted(df["Airline"].unique())
     dates = ["Select All"] + sorted(df["Date"].astype(str).unique())
 
-    # SESSION DEFAULTS
-    if "source" not in st.session_state:
-        st.session_state.source = "Select All"
-    if "destination" not in st.session_state:
-        st.session_state.destination = "Select All"
-    if "airline" not in st.session_state:
-        st.session_state.airline = "Select All"
-    if "sort" not in st.session_state:
-        st.session_state.sort = "Select"
-    if "date" not in st.session_state:
-        st.session_state.date = "Select All"
+    source = col1.selectbox(
+        "From",
+        sources,
+        index=sources.index(st.session_state.source),
+        key="source"
+    )
 
-    # INPUTS
-    source = col1.selectbox("From", sources, key="source")
-    destination = col2.selectbox("To", destinations, key="destination")
-    airline = col3.selectbox("Airline", airlines, key="airline")
-    sort = col4.selectbox("Sort By", ["Select", "Cheapest", "Premium", "Fastest", "Best"], key="sort")
-    selected_date = col5.selectbox("Travel Date", dates, key="date")
+    destination = col2.selectbox(
+        "To",
+        destinations,
+        index=destinations.index(st.session_state.destination),
+        key="destination"
+    )
 
-    # CLEAR BUTTON
+    airline = col3.selectbox(
+        "Airline",
+        airlines,
+        index=airlines.index(st.session_state.airline),
+        key="airline"
+    )
+
+    sort = col4.selectbox(
+        "Sort By",
+        ["Select", "Cheapest", "Premium", "Fastest", "Best"],
+        index=0,
+        key="sort"
+    )
+
+    selected_date = col5.selectbox(
+        "Travel Date",
+        dates,
+        index=dates.index(st.session_state.date),
+        key="date"
+    )
+
     col6.button("❌ Clear", on_click=clear_filters)
 
     # -----------------------------
@@ -87,10 +117,14 @@ with tab1:
     # -----------------------------
     # SEARCH BUTTON
     # -----------------------------
-    search = st.button("🔍 Search Flights")
+    is_valid = source != "Select All" and destination != "Select All"
+    search = st.button("🔍 Search Flights", disabled=not is_valid)
+
+    if not is_valid:
+        st.warning("Please select From and To")
 
     # -----------------------------
-    # FILTER LOGIC
+    # SEARCH LOGIC
     # -----------------------------
     if search:
 
@@ -125,17 +159,21 @@ with tab1:
 
         st.success("Flights Found")
 
-        # SAVE RECENT
+        # SAVE RECENT SEARCH
         st.session_state.recent_searches.insert(0, f"{source} → {destination}")
         st.session_state.recent_searches = st.session_state.recent_searches[:5]
 
         # -----------------------------
-        # RESULT CARDS (UPDATED)
+        # RESULT CARDS
         # -----------------------------
         for i, row in data.head(10).iterrows():
 
             discount = random.randint(200, 800)
             final_price = row["Price"] - discount
+
+            # SAFE ACCESS (NO ERROR)
+            duration = row.get("Duration", "N/A")
+            stops = row.get("Stops", row.get("Total_Stops", "N/A"))
 
             st.markdown(f"""
             <div style="
@@ -149,7 +187,7 @@ with tab1:
                 <div>
                     <b>{row['Airline']}</b><br>
                     {row['Source']} → {row['Destination']}<br>
-                    {row['Duration']} | {row['Stops']}<br><br>
+                    {duration} | {stops}<br><br>
 
                     <span style="background:#ff4b2b;padding:4px 10px;border-radius:6px;">
                         OFFER
