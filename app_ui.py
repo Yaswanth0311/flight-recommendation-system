@@ -1,111 +1,124 @@
 import streamlit as st
 import pandas as pd
-import base64
+from datetime import date
 
-# ==============================
-# BACKGROUND IMAGE (DARK)
-# ==============================
+# ---------------------------
+# PAGE CONFIG
+# ---------------------------
+st.set_page_config(page_title="Flight AI System", layout="wide")
+
+# ---------------------------
+# BACKGROUND IMAGE + DARK OVERLAY
+# ---------------------------
 def set_bg():
-    with open("bg.jpg", "rb") as f:
-        data = f.read()
-    encoded = base64.b64encode(data).decode()
-
-    st.markdown(f"""
+    st.markdown("""
     <style>
-    .stApp {{
-        background-image: url("data:image/jpg;base64,{encoded}");
+    .stApp {
+        background: linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.85)),
+                    url("bg.jpg");
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
-    }}
+    }
 
-    .stApp::before {{
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.9);
-        z-index: -1;
-    }}
-
-    /* Glass effect */
-    [data-testid="stVerticalBlock"] > div {{
-        background: rgba(0,0,0,0.6);
+    /* Glass card effect */
+    .glass {
+        background: rgba(255,255,255,0.08);
         padding: 20px;
         border-radius: 15px;
         backdrop-filter: blur(10px);
-        margin-bottom: 15px;
-    }}
+    }
 
-    h1 {{
+    /* Buttons */
+    div.stButton > button {
+        background: linear-gradient(90deg, #ff4b2b, #ff416c);
         color: white;
-        text-shadow: 0px 0px 20px rgba(255,255,255,0.3);
-    }}
+        border-radius: 10px;
+        height: 45px;
+        font-size: 16px;
+        width: 150px !important;
+        white-space: nowrap;
+    }
+
+    /* Slider color */
+    .stSlider > div > div {
+        color: #ff4b2b;
+    }
 
     </style>
     """, unsafe_allow_html=True)
 
 set_bg()
 
-# ==============================
+# ---------------------------
 # LOAD DATA
-# ==============================
+# ---------------------------
 df = pd.read_csv("flights.csv")
+
+# Convert date
 df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
+# ---------------------------
+# TITLE
+# ---------------------------
+st.title("✈️ Flight Recommendation System")
+st.subheader("✨ Smart AI-based Flight Finder")
+
+# ---------------------------
+# DATE RANGE INFO
+# ---------------------------
 min_date = df["Date"].min()
 max_date = df["Date"].max()
 
-# ==============================
-# TITLE
-# ==============================
-st.markdown("<h1>✈️ Flight Recommendation System</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='color:lightgray;'>✨ Smart AI-based Flight Finder</h4>", unsafe_allow_html=True)
+st.info(f"📅 Available Dates: {min_date} → {max_date}")
 
-# ==============================
+# ---------------------------
 # CLEAR BUTTON
-# ==============================
-col1, col2 = st.columns([9,1])
+# ---------------------------
+col1, col2 = st.columns([8,2])
 
 with col2:
-    if st.button("❌ Clear"):
+    if st.button("❌ Clear Filters"):
         st.session_state.clear()
         st.rerun()
 
-# ==============================
-# DATE INFO
-# ==============================
-st.info(f"📅 Available Dates: {min_date} → {max_date}")
+# ---------------------------
+# FILTER UI
+# ---------------------------
+st.markdown("<div class='glass'>", unsafe_allow_html=True)
 
-# ==============================
-# SELECT BOX OPTIONS (WITH DEFAULT "Select")
-# ==============================
-sources = ["Select"] + sorted(df["Source"].unique())
-destinations = ["Select"] + sorted(df["Destination"].unique())
-airlines = ["All"] + sorted(df["Airline"].unique())
-
-# ==============================
-# SEARCH BAR
-# ==============================
 col1, col2, col3, col4 = st.columns(4)
 
+# Source
 with col1:
-    source = st.selectbox("From", sources)
+    source = st.selectbox(
+        "From",
+        ["Select"] + sorted(df["Source"].unique().tolist())
+    )
 
+# Destination
 with col2:
-    destination = st.selectbox("To", destinations)
+    destination = st.selectbox(
+        "To",
+        ["Select"] + sorted(df["Destination"].unique().tolist())
+    )
 
+# Airline
 with col3:
-    airline = st.selectbox("Airline", airlines)
+    airline = st.selectbox(
+        "Airline",
+        ["All"] + sorted(df["Airline"].unique().tolist())
+    )
 
+# Date picker
 with col4:
-    travel_date = st.date_input("Date", min_value=min_date, max_value=max_date)
+    travel_date = st.date_input(
+        "Travel Date",
+        min_value=min_date,
+        max_value=max_date
+    )
 
-# ==============================
-# PRICE SLIDER
-# ==============================
+# Price slider
 price_range = st.slider(
     "Select Price Range",
     int(df["Price"].min()),
@@ -113,72 +126,55 @@ price_range = st.slider(
     (int(df["Price"].min()), int(df["Price"].max()))
 )
 
-# ==============================
-# BUTTON STYLE
-# ==============================
-st.markdown("""
-<style>
-div.stButton > button {
-    background: linear-gradient(90deg, #ff4b2b, #ff416c);
-    color: white;
-    border-radius: 10px;
-    height: 50px;
-    font-size: 18px;
-}
-</style>
-""", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
-search = st.button("🔍 Find Best Flights")
+# ---------------------------
+# SEARCH BUTTON
+# ---------------------------
+if st.button("🔍 Find Best Flights"):
 
-# ==============================
-# CARD UI
-# ==============================
-def flight_card(airline, price, duration):
-    st.markdown(f"""
-    <div style="
-        background: rgba(255,255,255,0.05);
-        padding: 15px;
-        border-radius: 12px;
-        margin-bottom: 10px;
-        border: 1px solid rgba(255,255,255,0.1);
-        color:white;
-    ">
-        ✈️ <b>{airline}</b><br>
-        💰 ₹{price} &nbsp;&nbsp; ⏱ {duration}
-    </div>
-    """, unsafe_allow_html=True)
+    filtered_df = df.copy()
 
-# ==============================
-# FILTER LOGIC
-# ==============================
-if search:
+    # Apply filters
+    if source != "Select":
+        filtered_df = filtered_df[filtered_df["Source"] == source]
 
-    # Prevent search if not selected
-    if source == "Select" or destination == "Select":
-        st.warning("⚠️ Please select Source and Destination")
+    if destination != "Select":
+        filtered_df = filtered_df[filtered_df["Destination"] == destination]
+
+    if airline != "All":
+        filtered_df = filtered_df[filtered_df["Airline"] == airline]
+
+    filtered_df = filtered_df[
+        (filtered_df["Price"] >= price_range[0]) &
+        (filtered_df["Price"] <= price_range[1])
+    ]
+
+    filtered_df = filtered_df[
+        filtered_df["Date"] == travel_date
+    ]
+
+    # ---------------------------
+    # RESULTS
+    # ---------------------------
+    if not filtered_df.empty:
+
+        st.success("🎉 Flights Found!")
+
+        best_flight = filtered_df.sort_values("Price").iloc[0]
+
+        st.markdown("### 🏆 Best Flight Recommendation")
+        st.markdown(f"""
+        <div class="glass">
+        ✈ Airline: {best_flight['Airline']} <br>
+        💰 Price: ₹{best_flight['Price']} <br>
+        ⏱ Duration: {best_flight['Duration']} <br>
+        📅 Date: {best_flight['Date']}
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("### 📊 Other Recommended Flights")
+        st.dataframe(filtered_df.reset_index(drop=True))
+
     else:
-        filtered = df[
-            (df["Source"] == source) &
-            (df["Destination"] == destination) &
-            (df["Price"] >= price_range[0]) &
-            (df["Price"] <= price_range[1]) &
-            (df["Date"] == travel_date)
-        ]
-
-        if airline != "All":
-            filtered = filtered[filtered["Airline"] == airline]
-
-        if filtered.empty:
-            st.error("❌ No flights found!")
-        else:
-            st.success("🎉 Flights Found!")
-
-            best = filtered.sort_values(by="Price").iloc[0]
-
-            st.subheader("🏆 Best Flight Recommendation")
-            flight_card(best["Airline"], best["Price"], best["Duration"])
-
-            st.subheader("📊 Other Recommended Flights")
-
-            for i, row in filtered.head(5).iterrows():
-                flight_card(row["Airline"], row["Price"], row["Duration"])
+        st.error("❌ No flights found!")
