@@ -11,7 +11,6 @@ st.markdown("""
     color: white;
 }
 
-/* Glass Card */
 .card {
     background: rgba(255,255,255,0.07);
     padding: 20px;
@@ -20,7 +19,6 @@ st.markdown("""
     backdrop-filter: blur(10px);
 }
 
-/* Buttons */
 div.stButton > button {
     background: linear-gradient(90deg, #ff4b2b, #ff416c);
     color: white;
@@ -28,18 +26,21 @@ div.stButton > button {
     height: 40px;
     width: 180px;
 }
-
-/* Center button */
-.center-btn {
-    display: flex;
-    justify-content: center;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- DATA ----------------
+# ---------------- LOAD DATA ----------------
 df = pd.read_csv("flights.csv")
-df["Date"] = pd.to_datetime(df["Date"]).dt.date
+
+# Fix Date
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
+
+# Fix Stops column (VERY IMPORTANT FIX)
+if "Stops" not in df.columns:
+    if "Total_Stops" in df.columns:
+        df["Stops"] = df["Total_Stops"]
+    else:
+        df["Stops"] = "non-stop"   # fallback
 
 # ---------------- TITLE ----------------
 st.title("Flight Recommendation System")
@@ -47,7 +48,7 @@ st.caption("Smart AI-based Flight Finder")
 
 st.info(f"Available Dates: {df['Date'].min()} → {df['Date'].max()}")
 
-# ---------------- FILTERS ----------------
+# ---------------- FILTER HEADER ----------------
 col1, col2 = st.columns([8,2])
 
 with col1:
@@ -58,22 +59,22 @@ with col2:
         st.session_state.clear()
         st.rerun()
 
-# FILTER GRID (NO EMPTY BAR NOW)
+# ---------------- FILTERS ----------------
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    source = st.selectbox("From", ["Select"] + sorted(df["Source"].unique()))
+    source = st.selectbox("From", ["Select"] + sorted(df["Source"].dropna().unique()))
 
 with col2:
-    destination = st.selectbox("To", ["Select"] + sorted(df["Destination"].unique()))
+    destination = st.selectbox("To", ["Select"] + sorted(df["Destination"].dropna().unique()))
 
 with col3:
-    airline = st.selectbox("Airline", ["All"] + sorted(df["Airline"].unique()))
+    airline = st.selectbox("Airline", ["All"] + sorted(df["Airline"].dropna().unique()))
 
 with col4:
     travel_date = st.selectbox(
         "Date",
-        ["Select"] + sorted(df["Date"].astype(str).unique())
+        ["Select"] + sorted(df["Date"].dropna().astype(str).unique())
     )
 
 col5, col6, col7 = st.columns(3)
@@ -98,12 +99,12 @@ with col7:
         ["All", "Non-stop", "1 Stop", "2+ Stops"]
     )
 
-# SEARCH BUTTON CENTER
+# ---------------- SEARCH BUTTON ----------------
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
     search = st.button("Search Flights")
 
-# ---------------- LOGO MAPPING ----------------
+# ---------------- LOGOS ----------------
 logos = {
     "IndiGo": "https://upload.wikimedia.org/wikipedia/commons/0/0b/IndiGo_Logo.svg",
     "Air India": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Air_India_Logo.svg",
@@ -133,17 +134,25 @@ if search:
         (data["Price"] <= price_range[1])
     ]
 
-    # Stops filter
+    # ---------------- STOPS FILTER ----------------
     if stops == "Non-stop":
-        data = data[data["Stops"] == "non-stop"]
+        data = data[data["Stops"].astype(str).str.contains("non", case=False)]
     elif stops == "1 Stop":
-        data = data[data["Stops"] == "1 stop"]
+        data = data[data["Stops"].astype(str).str.contains("1", case=False)]
     elif stops == "2+ Stops":
-        data = data[data["Stops"].isin(["2 stops", "3 stops"])]
+        data = data[data["Stops"].astype(str).str.contains("2|3", case=False)]
 
-    # Sorting
-    data["Duration_Min"] = data["Duration"].str.extract(r'(\d+)').astype(int)
+    # ---------------- DURATION ----------------
+    def convert_duration(x):
+        try:
+            h = int(str(x).split("h")[0])
+            return h
+        except:
+            return 0
 
+    data["Duration_Min"] = data["Duration"].apply(convert_duration)
+
+    # ---------------- SORT ----------------
     if sort_option == "Cheapest":
         data = data.sort_values("Price")
 
@@ -164,7 +173,7 @@ if search:
 
         st.success("Flights Found")
 
-        for i, row in data.head(10).iterrows():
+        for _, row in data.head(10).iterrows():
 
             logo_url = logos.get(row["Airline"], "")
 
