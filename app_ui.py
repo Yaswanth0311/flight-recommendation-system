@@ -11,7 +11,7 @@ st.set_page_config(page_title="Flight App", layout="wide")
 # LOAD DATA
 # -----------------------------
 df = pd.read_csv("flights.csv")
-df["Date"] = pd.to_datetime(df["Date"]).dt.date
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
 # -----------------------------
 # SESSION STATE
@@ -19,93 +19,58 @@ df["Date"] = pd.to_datetime(df["Date"]).dt.date
 if "recent_searches" not in st.session_state:
     st.session_state.recent_searches = []
 
-if "source" not in st.session_state:
-    st.session_state.source = "Select All"
+defaults = {
+    "source": "Select All",
+    "destination": "Select All",
+    "airline": "Select All",
+    "sort": "Select",
+    "date": "Select All"
+}
 
-if "destination" not in st.session_state:
-    st.session_state.destination = "Select All"
-
-if "airline" not in st.session_state:
-    st.session_state.airline = "Select All"
-
-if "sort" not in st.session_state:
-    st.session_state.sort = "Select"
-
-if "date" not in st.session_state:
-    st.session_state.date = "Select All"
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 # -----------------------------
 # CLEAR FILTERS
 # -----------------------------
 def clear_filters():
-    st.session_state.source = "Select All"
-    st.session_state.destination = "Select All"
-    st.session_state.airline = "Select All"
-    st.session_state.sort = "Select"
-    st.session_state.date = "Select All"
+    for key in defaults:
+        st.session_state[key] = defaults[key]
 
 # -----------------------------
 # HEADER
 # -----------------------------
 st.title("Flight Recommendation System")
-st.write("Smart AI-based Flight Finder")
+st.caption("Smart AI-based Flight Finder")
 
 # -----------------------------
 # TABS
 # -----------------------------
 tab1, tab2, tab3 = st.tabs(["✈ Flights", "🏨 Hotels", "🚆 Trains"])
 
+# =============================
+# FLIGHTS TAB
+# =============================
 with tab1:
 
-    # -----------------------------
-    # FILTERS
-    # -----------------------------
     col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-    sources = ["Select All"] + sorted(df["Source"].unique())
-    destinations = ["Select All"] + sorted(df["Destination"].unique())
-    airlines = ["Select All"] + sorted(df["Airline"].unique())
-    dates = ["Select All"] + sorted(df["Date"].astype(str).unique())
+    sources = ["Select All"] + sorted(df["Source"].dropna().unique())
+    destinations = ["Select All"] + sorted(df["Destination"].dropna().unique())
+    airlines = ["Select All"] + sorted(df["Airline"].dropna().unique())
+    dates = ["Select All"] + sorted(df["Date"].dropna().astype(str).unique())
 
-    source = col1.selectbox(
-        "From",
-        sources,
-        index=sources.index(st.session_state.source),
-        key="source"
-    )
-
-    destination = col2.selectbox(
-        "To",
-        destinations,
-        index=destinations.index(st.session_state.destination),
-        key="destination"
-    )
-
-    airline = col3.selectbox(
-        "Airline",
-        airlines,
-        index=airlines.index(st.session_state.airline),
-        key="airline"
-    )
-
-    sort = col4.selectbox(
-        "Sort By",
-        ["Select", "Cheapest", "Premium", "Fastest", "Best"],
-        index=0,
-        key="sort"
-    )
-
-    selected_date = col5.selectbox(
-        "Travel Date",
-        dates,
-        index=dates.index(st.session_state.date),
-        key="date"
-    )
+    source = col1.selectbox("From", sources, key="source")
+    destination = col2.selectbox("To", destinations, key="destination")
+    airline = col3.selectbox("Airline", airlines, key="airline")
+    sort = col4.selectbox("Sort By", ["Select", "Cheapest", "Premium"], key="sort")
+    selected_date = col5.selectbox("Travel Date", dates, key="date")
 
     col6.button("❌ Clear", on_click=clear_filters)
 
     # -----------------------------
-    # PRICE RANGE
+    # PRICE
     # -----------------------------
     price_range = st.slider(
         "Price Range",
@@ -117,11 +82,11 @@ with tab1:
     # -----------------------------
     # SEARCH BUTTON
     # -----------------------------
-    is_valid = source != "Select All" and destination != "Select All"
-    search = st.button("🔍 Search Flights", disabled=not is_valid)
+    valid = source != "Select All" and destination != "Select All"
+    search = st.button("🔍 Search Flights", disabled=not valid)
 
-    if not is_valid:
-        st.warning("Please select From and To")
+    if not valid:
+        st.warning("Please select From & To locations")
 
     # -----------------------------
     # SEARCH LOGIC
@@ -147,15 +112,10 @@ with tab1:
             (data["Price"] <= price_range[1])
         ]
 
-        # SORTING
         if sort == "Cheapest":
             data = data.sort_values("Price")
         elif sort == "Premium":
             data = data.sort_values("Price", ascending=False)
-        elif sort == "Fastest":
-            data = data.sort_values("Duration")
-        elif sort == "Best":
-            data = data.sort_values(["Price", "Duration"])
 
         st.success("Flights Found")
 
@@ -171,38 +131,42 @@ with tab1:
             discount = random.randint(200, 800)
             final_price = row["Price"] - discount
 
-            # SAFE ACCESS (NO ERROR)
-            duration = row.get("Duration", "N/A")
-            stops = row.get("Stops", row.get("Total_Stops", "N/A"))
+            # SAFE HANDLING (NO ERROR EVER)
+            duration = row["Duration"] if "Duration" in df.columns else "N/A"
+            stops = row["Stops"] if "Stops" in df.columns else row.get("Total_Stops", "N/A")
 
             st.markdown(f"""
             <div style="
                 background: rgba(255,255,255,0.05);
                 padding:20px;
                 border-radius:12px;
-                margin-bottom:10px;
+                margin-bottom:12px;
                 display:flex;
                 justify-content:space-between;
+                align-items:center;
             ">
                 <div>
-                    <b>{row['Airline']}</b><br>
-                    {row['Source']} → {row['Destination']}<br>
-                    {duration} | {stops}<br><br>
+                    <h4 style="margin:0;">{row['Airline']}</h4>
+                    <p style="margin:0;">{row['Source']} → {row['Destination']}</p>
+                    <p style="margin:0;">{duration} | {stops}</p>
 
-                    <span style="background:#ff4b2b;padding:4px 10px;border-radius:6px;">
+                    <span style="
+                        background:#ff4b2b;
+                        padding:4px 10px;
+                        border-radius:6px;
+                        font-size:12px;
+                    ">
                         OFFER
-                    </span><br><br>
-
-                    <span style="color:#00ff9d;">
-                        ₹{discount} OFF
                     </span>
+
+                    <p style="color:#00ff9d;">₹{discount} OFF</p>
                 </div>
 
                 <div style="text-align:right;">
-                    <p style="text-decoration:line-through;">
+                    <p style="text-decoration:line-through; margin:0;">
                         ₹{row['Price']}
                     </p>
-                    <h2>₹{final_price}</h2>
+                    <h2 style="margin:0;">₹{final_price}</h2>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -227,9 +191,9 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
 
-# -----------------------------
+# =============================
 # OTHER TABS
-# -----------------------------
+# =============================
 with tab2:
     st.info("Hotels coming soon")
 
