@@ -2,17 +2,17 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-# -------------------------------
+# -----------------------------
 # Load Data
-# -------------------------------
+# -----------------------------
 df = pd.read_csv("flights.csv")
 
 # Convert Date column
 df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
-# -------------------------------
+# -----------------------------
 # Session State Defaults
-# -------------------------------
+# -----------------------------
 if "source" not in st.session_state:
     st.session_state.source = df["Source"].iloc[0]
 
@@ -31,18 +31,18 @@ if "price_range" not in st.session_state:
 if "travel_date" not in st.session_state:
     st.session_state.travel_date = df["Date"].iloc[0]
 
-# -------------------------------
-# TITLE
-# -------------------------------
+# -----------------------------
+# Title
+# -----------------------------
 st.title("✈️ Flight Recommendation System")
 st.subheader("✨ Smart AI-based Flight Finder")
 
-# -------------------------------
+# -----------------------------
 # Clear Filters Button
-# -------------------------------
-col_title, col_btn = st.columns([4, 1])
+# -----------------------------
+col1, col2 = st.columns([8, 1])
 
-with col_btn:
+with col2:
     if st.button("❌ Clear"):
         st.session_state.source = df["Source"].iloc[0]
         st.session_state.destination = df["Destination"].iloc[0]
@@ -54,29 +54,29 @@ with col_btn:
         st.session_state.travel_date = df["Date"].iloc[0]
         st.rerun()
 
-# -------------------------------
-# FILTERS UI
-# -------------------------------
+# -----------------------------
+# Filters UI
+# -----------------------------
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     source = st.selectbox(
         "Source",
-        sorted(df["Source"].unique()),
+        df["Source"].unique(),
         key="source"
     )
 
 with col2:
     destination = st.selectbox(
         "Destination",
-        sorted(df["Destination"].unique()),
+        df["Destination"].unique(),
         key="destination"
     )
 
 with col3:
     airline = st.selectbox(
         "Airline",
-        ["All"] + sorted(df["Airline"].unique()),
+        ["All"] + list(df["Airline"].unique()),
         key="airline"
     )
 
@@ -86,7 +86,9 @@ with col4:
         key="travel_date"
     )
 
+# -----------------------------
 # Price Slider
+# -----------------------------
 price_range = st.slider(
     "Select Price Range",
     int(df["Price"].min()),
@@ -94,17 +96,16 @@ price_range = st.slider(
     key="price_range"
 )
 
-# -------------------------------
-# BUTTON
-# -------------------------------
+# -----------------------------
+# Search Button
+# -----------------------------
 if st.button("🔍 Find Best Flights"):
 
-    # ---------------------------
-    # Filtering Logic
-    # ---------------------------
     filtered_df = df[
         (df["Source"] == source) &
         (df["Destination"] == destination) &
+        (df["Price"] >= price_range[0]) &
+        (df["Price"] <= price_range[1]) &
         (df["Date"] == travel_date)
     ]
 
@@ -113,32 +114,24 @@ if st.button("🔍 Find Best Flights"):
             filtered_df["Airline"] == airline
         ]
 
-    filtered_df = filtered_df[
-        (filtered_df["Price"] >= price_range[0]) &
-        (filtered_df["Price"] <= price_range[1])
-    ]
-
-    # ---------------------------
+    # -----------------------------
     # Results
-    # ---------------------------
+    # -----------------------------
     if filtered_df.empty:
-        st.warning("⚠️ No flights found for selected filters")
+        st.error("❌ No flights found!")
     else:
-        st.success(f"✅ Found {len(filtered_df)} flights")
+        st.success("🎉 Flights Found!")
 
-        # Best Flight (Cheapest)
+        # Best flight
         best_flight = filtered_df.sort_values(by="Price").iloc[0]
 
-        st.subheader("🏆 Best Flight Recommendation")
-        st.info(
-            f"✈️ Airline: {best_flight['Airline']}  \n"
+        st.markdown("## 🏆 Best Flight Recommendation")
+        st.success(
+            f"✈ Airline: {best_flight['Airline']}  \n"
             f"💰 Price: ₹{best_flight['Price']}  \n"
-            f"⏱ Duration: {best_flight['Duration']}  \n"
-            f"📅 Date: {best_flight['Date']}"
+            f"⏱ Duration: {best_flight['Duration']}"
         )
 
-        # Show Top 10 Flights
-        st.subheader("📊 Top Available Flights")
-        st.dataframe(
-            filtered_df.sort_values(by="Price").head(10).reset_index(drop=True)
-        )
+        # Table
+        st.markdown("## 📊 Other Recommended Flights")
+        st.dataframe(filtered_df.reset_index(drop=True))
