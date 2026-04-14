@@ -1,124 +1,123 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(layout="wide")
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(page_title="Flight App", layout="wide")
 
-# ---------------- STYLE ----------------
+# -----------------------------
+# CSS (Professional UI)
+# -----------------------------
 st.markdown("""
 <style>
-.stApp {
+body {
     background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
     color: white;
 }
 
 .card {
-    background: rgba(255,255,255,0.08);
-    padding: 20px;
-    border-radius: 15px;
-    margin-bottom: 15px;
+    background: rgba(255,255,255,0.05);
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:15px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
 }
 
-div.stButton > button {
-    background: linear-gradient(90deg, #ff4b2b, #ff416c);
+.metric {
+    background: rgba(255,255,255,0.05);
+    padding:15px;
+    border-radius:12px;
+    text-align:center;
+}
+
+.stButton>button {
+    background: linear-gradient(90deg, #ff416c, #ff4b2b);
     color: white;
-    border-radius: 8px;
-    height: 40px;
-    width: 180px;
-}
-
-.block-container {
-    padding-top: 2rem;
+    border-radius:8px;
+    padding:8px 20px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- LOAD DATA ----------------
+# -----------------------------
+# LOAD DATA
+# -----------------------------
 df = pd.read_csv("flights.csv")
 
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
-
-# Fix Stops column
+# Safe defaults if missing
 if "Stops" not in df.columns:
-    if "Total_Stops" in df.columns:
-        df["Stops"] = df["Total_Stops"]
+    df["Stops"] = "non-stop"
+
+# -----------------------------
+# OFFER LOGIC
+# -----------------------------
+def get_offer(row):
+    price = row["Price"]
+    stops = str(row["Stops"]).lower()
+    airline = row["Airline"]
+
+    discount = 0
+    tag = ""
+
+    if price > 6000:
+        discount = 800
+        tag = "Super Saver"
+    elif price > 4000:
+        discount = 500
+        tag = "Best Deal"
     else:
-        df["Stops"] = "non-stop"
+        discount = 200
+        tag = "Budget"
 
-# ---------------- TITLE ----------------
+    if "non" in stops:
+        discount += 150
+        tag = "Non-stop Special"
+
+    if airline == "IndiGo":
+        discount += 100
+        tag = "IndiGo Offer"
+
+    final_price = max(price - discount, int(price * 0.5))
+    return discount, final_price, tag
+
+# -----------------------------
+# HEADER
+# -----------------------------
 st.title("Flight Recommendation System")
-st.caption("Smart AI-based Flight Finder")
+st.write("Smart AI-based Flight Finder")
 
-st.info(f"Available Dates: {df['Date'].min()} → {df['Date'].max()}")
+# -----------------------------
+# ANALYTICS (TOP CARDS)
+# -----------------------------
+col1, col2, col3 = st.columns(3)
 
-# ---------------- FILTER HEADER ----------------
-col1, col2 = st.columns([8,2])
+col1.markdown(f"<div class='metric'>Total Flights<br><h2>{len(df)}</h2></div>", unsafe_allow_html=True)
+col2.markdown(f"<div class='metric'>Avg Price<br><h2>₹{int(df['Price'].mean())}</h2></div>", unsafe_allow_html=True)
+col3.markdown(f"<div class='metric'>Airlines<br><h2>{df['Airline'].nunique()}</h2></div>", unsafe_allow_html=True)
 
-with col1:
-    st.subheader("Filters")
+st.write("---")
 
-with col2:
-    if st.button("Clear Filters"):
-        st.session_state.clear()
-        st.rerun()
-
-# ---------------- FILTERS ----------------
+# -----------------------------
+# FILTERS
+# -----------------------------
 col1, col2, col3, col4 = st.columns(4)
 
-with col1:
-    source = st.selectbox("From", ["Select"] + sorted(df["Source"].dropna().unique()))
+source = col1.selectbox("From", ["Select"] + sorted(df["Source"].unique()))
+destination = col2.selectbox("To", ["Select"] + sorted(df["Destination"].unique()))
+airline = col3.selectbox("Airline", ["All"] + sorted(df["Airline"].unique()))
+sort = col4.selectbox("Sort By", ["Cheapest", "Fastest", "Best Value", "Premium"])
 
-with col2:
-    destination = st.selectbox("To", ["Select"] + sorted(df["Destination"].dropna().unique()))
+price_range = st.slider("Price Range", int(df["Price"].min()), int(df["Price"].max()), (2000, 15000))
 
-with col3:
-    airline = st.selectbox("Airline", ["All"] + sorted(df["Airline"].dropna().unique()))
+st.write("")
 
-with col4:
-    travel_date = st.selectbox(
-        "Date",
-        ["Select"] + sorted(df["Date"].dropna().astype(str).unique())
-    )
+search = st.button("Search Flights")
 
-col5, col6, col7 = st.columns(3)
-
-with col5:
-    price_range = st.slider(
-        "Price Range",
-        int(df["Price"].min()),
-        int(df["Price"].max()),
-        (int(df["Price"].min()), int(df["Price"].max()))
-    )
-
-with col6:
-    sort_option = st.selectbox(
-        "Sort By",
-        ["Cheapest", "Fastest", "Best Value", "Premium"]
-    )
-
-with col7:
-    stops = st.selectbox(
-        "Stops",
-        ["All", "Non-stop", "1 Stop", "2+ Stops"]
-    )
-
-# ---------------- SEARCH BUTTON ----------------
-col1, col2, col3 = st.columns([1,2,1])
-with col2:
-    search = st.button("Search Flights")
-
-# ---------------- LOGOS ----------------
-logos = {
-    "IndiGo": "https://upload.wikimedia.org/wikipedia/commons/0/0b/IndiGo_Logo.svg",
-    "Air India": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Air_India_Logo.svg",
-    "SpiceJet": "https://upload.wikimedia.org/wikipedia/commons/9/9b/SpiceJet_logo.svg",
-    "GoAir": "https://upload.wikimedia.org/wikipedia/commons/8/8e/Go_First_logo.svg"
-}
-
-# ---------------- SEARCH LOGIC ----------------
+# -----------------------------
+# FILTER LOGIC
+# -----------------------------
 if search:
-
     data = df.copy()
 
     if source != "Select":
@@ -130,72 +129,56 @@ if search:
     if airline != "All":
         data = data[data["Airline"] == airline]
 
-    if travel_date != "Select":
-        data = data[data["Date"].astype(str) == travel_date]
-
-    data = data[
-        (data["Price"] >= price_range[0]) &
-        (data["Price"] <= price_range[1])
-    ]
-
-    # Stops filter
-    if stops == "Non-stop":
-        data = data[data["Stops"].astype(str).str.contains("non", case=False)]
-    elif stops == "1 Stop":
-        data = data[data["Stops"].astype(str).str.contains("1", case=False)]
-    elif stops == "2+ Stops":
-        data = data[data["Stops"].astype(str).str.contains("2|3", case=False)]
-
-    # Duration
-    def convert_duration(x):
-        try:
-            return int(str(x).split("h")[0])
-        except:
-            return 0
-
-    data["Duration_Min"] = data["Duration"].apply(convert_duration)
+    data = data[(data["Price"] >= price_range[0]) & (data["Price"] <= price_range[1])]
 
     # Sorting
-    if sort_option == "Cheapest":
+    if sort == "Cheapest":
         data = data.sort_values("Price")
+    elif sort == "Fastest":
+        data = data.sort_values("Duration")
+    elif sort == "Premium":
+        data = data.sort_values("Price", ascending=False)
 
-    elif sort_option == "Fastest":
-        data = data.sort_values("Duration_Min")
+    st.success("Flights Found")
 
-    elif sort_option == "Best Value":
-        data["Score"] = data["Price"] * 0.7 + data["Duration_Min"] * 0.3
-        data = data.sort_values("Score")
+    # -----------------------------
+    # RESULTS (CARDS)
+    # -----------------------------
+    for i, row in data.head(20).iterrows():
 
-    elif sort_option == "Premium":
-        premium = ["IndiGo", "Air India"]
-        data["Premium"] = data["Airline"].apply(lambda x: 0 if x in premium else 1)
-        data = data.sort_values(["Premium", "Price"])
+        discount, final_price, tag = get_offer(row)
 
-    # ---------------- RESULTS ----------------
-    if not data.empty:
+        st.markdown(f"""
+        <div class='card'>
+            <div style="display:flex; justify-content:space-between;">
 
-        st.success("Flights Found")
-
-        for i, row in data.head(10).iterrows():
-
-            col1, col2 = st.columns([3,1])
-
-            with col1:
-                logo_url = logos.get(row["Airline"], "")
-
-                st.markdown(f"""
-                <div class='card'>
-                    <img src="{logo_url}" width="80"><br><br>
+                <div>
                     <b>{row['Airline']}</b><br>
                     {row['Source']} → {row['Destination']}<br>
-                    {row['Duration']} | {row['Stops']}
+                    {row['Duration']} | {row['Stops']}<br><br>
+
+                    <span style="background:#ff4b2b;padding:4px 10px;border-radius:6px;font-size:12px;">
+                        {tag}
+                    </span><br><br>
+
+                    <span style="color:#00ff9d;">
+                        ₹{discount} OFF
+                    </span>
                 </div>
-                """, unsafe_allow_html=True)
 
-            with col2:
-                st.markdown(f"### ₹{row['Price']}")
-                if st.button(f"Book Now {i}"):
-                    st.success("Booking Successful (Demo)")
+                <div style="text-align:right;">
+                    <p style="text-decoration:line-through;">
+                        ₹{row['Price']}
+                    </p>
+                    <h2>₹{final_price}</h2>
+                </div>
 
-    else:
-        st.error("No flights found")
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Book Now", key=f"book_{i}"):
+            st.success(f"{row['Airline']} booked at ₹{final_price} ✈️")
+
+else:
+    st.info("Select filters and click Search Flights")
