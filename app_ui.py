@@ -3,40 +3,21 @@ import pandas as pd
 from datetime import date
 
 # -----------------------------
-# PAGE CONFIG
+# CONFIG
 # -----------------------------
 st.set_page_config(page_title="Flight App", layout="wide")
-
-# -----------------------------
-# CSS (PRO UI)
-# -----------------------------
-st.markdown("""
-<style>
-body {
-    background-color: #0e1117;
-}
-.metric {
-    background: rgba(255,255,255,0.05);
-    padding:15px;
-    border-radius:10px;
-    text-align:center;
-}
-.stButton>button {
-    background: linear-gradient(90deg, #ff416c, #ff4b2b);
-    color: white;
-    border-radius:8px;
-    padding:8px 20px;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # -----------------------------
 # LOAD DATA
 # -----------------------------
 df = pd.read_csv("flights.csv")
-
-# Ensure Date format
 df["Date"] = pd.to_datetime(df["Date"]).dt.date
+
+# -----------------------------
+# SESSION STATE
+# -----------------------------
+if "recent_searches" not in st.session_state:
+    st.session_state.recent_searches = []
 
 # -----------------------------
 # HEADER
@@ -49,35 +30,52 @@ st.write("Smart AI-based Flight Finder")
 # -----------------------------
 c1, c2, c3 = st.columns(3)
 
-c1.markdown(f"<div class='metric'>Flights<br><h2>{len(df)}</h2></div>", unsafe_allow_html=True)
-c2.markdown(f"<div class='metric'>Avg Price<br><h2>₹{int(df['Price'].mean())}</h2></div>", unsafe_allow_html=True)
-c3.markdown(f"<div class='metric'>Airlines<br><h2>{df['Airline'].nunique()}</h2></div>", unsafe_allow_html=True)
+c1.metric("Flights", len(df))
+c2.metric("Avg Price", f"₹{int(df['Price'].mean())}")
+c3.metric("Airlines", df["Airline"].nunique())
 
 st.write("---")
 
 # -----------------------------
-# FILTERS (MAKE MY TRIP STYLE)
+# FILTERS
 # -----------------------------
 col1, col2, col3, col4, col5 = st.columns(5)
 
-source = col1.selectbox("From", ["Select"] + sorted(df["Source"].unique()))
-destination = col2.selectbox("To", ["Select"] + sorted(df["Destination"].unique()))
-airline = col3.selectbox("Airline", ["All"] + sorted(df["Airline"].unique()))
-sort = col4.selectbox("Sort By", ["Cheapest", "Premium", "Fastest", "Best"])
+sources = ["Select"] + sorted(df["Source"].unique())
+destinations = ["Select"] + sorted(df["Destination"].unique())
 
-# 👉 CALENDAR UI (🔥 MAIN FEATURE)
-min_date = df["Date"].min()
-max_date = df["Date"].max()
-
-travel_date = col5.date_input(
-    "Travel Date",
-    min_value=min_date,
-    max_value=max_date,
-    value=min_date
-)
+# Initialize session values
+if "source" not in st.session_state:
+    st.session_state.source = "Select"
+if "destination" not in st.session_state:
+    st.session_state.destination = "Select"
 
 # -----------------------------
-# PRICE SLIDER
+# SWAP BUTTON
+# -----------------------------
+def swap():
+    st.session_state.source, st.session_state.destination = (
+        st.session_state.destination,
+        st.session_state.source,
+    )
+
+# -----------------------------
+# INPUTS
+# -----------------------------
+source = col1.selectbox("From", sources, key="source")
+destination = col2.selectbox("To", destinations, key="destination")
+
+col2.button("🔁", on_click=swap)
+
+airline = col3.selectbox("Airline", ["Select"] + sorted(df["Airline"].unique()))
+sort = col4.selectbox("Sort By", ["Select", "Cheapest", "Premium", "Fastest", "Best"])
+
+# DATE SELECT
+date_list = ["Select"] + sorted(df["Date"].astype(str).unique())
+selected_date = col5.selectbox("Travel Date", date_list)
+
+# -----------------------------
+# PRICE RANGE
 # -----------------------------
 price_range = st.slider(
     "Price Range",
@@ -86,26 +84,15 @@ price_range = st.slider(
     (2000, 15000)
 )
 
-search = st.button("Search Flights")
-
 # -----------------------------
-# OFFER LOGIC
+# DISABLE SEARCH BUTTON
 # -----------------------------
-def get_offer(row):
-    price = row["Price"]
-    discount = 200
-    tag = "Offer"
+is_valid = source != "Select" and destination != "Select"
 
-    if price > 5000:
-        discount = 500
-        tag = "Best Deal"
+search = st.button("Search Flights", disabled=not is_valid)
 
-    if "non" in str(row["Stops"]).lower():
-        discount += 150
-        tag = "Non-stop Special"
-
-    final_price = price - discount
-    return discount, final_price, tag
+if not is_valid:
+    st.warning("Please select From and To locations")
 
 # -----------------------------
 # FILTER LOGIC
@@ -120,14 +107,12 @@ if search:
     if destination != "Select":
         data = data[data["Destination"] == destination]
 
-    if airline != "All":
+    if airline != "Select":
         data = data[data["Airline"] == airline]
 
-    # DATE FILTER 🔥
-    if travel_date:
-        data = data[data["Date"] == travel_date]
+    if selected_date != "Select":
+        data = data[data["Date"].astype(str) == selected_date]
 
-    # PRICE FILTER
     data = data[
         (data["Price"] >= price_range[0]) &
         (data["Price"] <= price_range[1])
@@ -143,27 +128,27 @@ if search:
     elif sort == "Best":
         data = data.sort_values(["Price", "Duration"])
 
+    # SAVE RECENT SEARCH
+    st.session_state.recent_searches.insert(0, f"{source} → {destination}")
+    st.session_state.recent_searches = st.session_state.recent_searches[:5]
+
     st.success("Flights Found")
 
-    # -----------------------------
-    # DISPLAY RESULTS
-    # -----------------------------
-    for i, row in data.head(15).iterrows():
-
-        discount, final_price, tag = get_offer(row)
-
+    for i, row in data.head(10).iterrows():
         st.subheader(f"{row['Airline']} | {row['Source']} → {row['Destination']}")
+        st.write(f"{row['Duration']} | {row['Stops']}")
+        st.write(f"₹{row['Price']}")
 
-        st.write(f"Date: {row['Date']}")
-        st.write(f"Duration: {row['Duration']} | {row['Stops']}")
-        st.write(f"{tag} | ₹{discount} OFF")
-
-        st.write(f"~~₹{row['Price']}~~ → ₹{final_price}")
-
-        if st.button("Book Now", key=f"book_{i}"):
-            st.success(f"Booked {row['Airline']} at ₹{final_price}")
+        if st.button("Book Now", key=i):
+            st.success("Flight booked!")
 
         st.write("---")
 
-else:
-    st.info("Select filters and click Search Flights")
+# -----------------------------
+# RECENT SEARCHES
+# -----------------------------
+if st.session_state.recent_searches:
+    st.write("### 🕘 Recent Searches")
+
+    for item in st.session_state.recent_searches:
+        st.write(f"• {item}")
