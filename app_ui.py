@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import random
 
-# -----------------------------
-# CONFIG
-# -----------------------------
 st.set_page_config(page_title="Flight App", layout="wide")
 
 # -----------------------------
@@ -19,24 +16,15 @@ df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 if "recent_searches" not in st.session_state:
     st.session_state.recent_searches = []
 
-defaults = {
-    "source": "Select All",
-    "destination": "Select All",
-    "airline": "Select All",
-    "sort": "Select",
-    "date": "Select All"
-}
-
-for key, val in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = val
-
 # -----------------------------
 # CLEAR FILTERS
 # -----------------------------
 def clear_filters():
-    for key in defaults:
-        st.session_state[key] = defaults[key]
+    st.session_state.source = "Select All"
+    st.session_state.destination = "Select All"
+    st.session_state.airline = "Select All"
+    st.session_state.sort = "Select"
+    st.session_state.date = "Select All"
 
 # -----------------------------
 # HEADER
@@ -54,12 +42,14 @@ tab1, tab2, tab3 = st.tabs(["✈ Flights", "🏨 Hotels", "🚆 Trains"])
 # =============================
 with tab1:
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-
+    # Dropdown values
     sources = ["Select All"] + sorted(df["Source"].dropna().unique())
     destinations = ["Select All"] + sorted(df["Destination"].dropna().unique())
     airlines = ["Select All"] + sorted(df["Airline"].dropna().unique())
     dates = ["Select All"] + sorted(df["Date"].dropna().astype(str).unique())
+
+    # Layout
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     source = col1.selectbox("From", sources, key="source")
     destination = col2.selectbox("To", destinations, key="destination")
@@ -70,7 +60,7 @@ with tab1:
     col6.button("❌ Clear", on_click=clear_filters)
 
     # -----------------------------
-    # PRICE
+    # PRICE SLIDER
     # -----------------------------
     price_range = st.slider(
         "Price Range",
@@ -119,21 +109,20 @@ with tab1:
 
         st.success("Flights Found")
 
-        # SAVE RECENT SEARCH
+        # Save recent
         st.session_state.recent_searches.insert(0, f"{source} → {destination}")
         st.session_state.recent_searches = st.session_state.recent_searches[:5]
 
         # -----------------------------
-        # RESULT CARDS
+        # RESULT CARDS (FIXED)
         # -----------------------------
         for i, row in data.head(10).iterrows():
 
             discount = random.randint(200, 800)
-            final_price = row["Price"] - discount
+            final_price = int(row["Price"]) - discount
 
-            # SAFE HANDLING (NO ERROR EVER)
-            duration = row["Duration"] if "Duration" in df.columns else "N/A"
-            stops = row["Stops"] if "Stops" in df.columns else row.get("Total_Stops", "N/A")
+            duration = row["Duration"] if "Duration" in data.columns else "N/A"
+            stops = row["Stops"] if "Stops" in data.columns else row.get("Total_Stops", "N/A")
 
             st.markdown(f"""
             <div style="
@@ -159,14 +148,18 @@ with tab1:
                         OFFER
                     </span>
 
-                    <p style="color:#00ff9d;">₹{discount} OFF</p>
+                    <p style="color:#00ff9d;margin:5px 0;">
+                        ₹{discount} OFF
+                    </p>
                 </div>
 
                 <div style="text-align:right;">
-                    <p style="text-decoration:line-through; margin:0;">
-                        ₹{row['Price']}
+                    <p style="text-decoration:line-through;margin:0;">
+                        ₹{int(row['Price'])}
                     </p>
-                    <h2 style="margin:0;">₹{final_price}</h2>
+                    <h2 style="margin:0;">
+                        ₹{final_price}
+                    </h2>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -191,9 +184,9 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
 
-# =============================
+# -----------------------------
 # OTHER TABS
-# =============================
+# -----------------------------
 with tab2:
     st.info("Hotels coming soon")
 
