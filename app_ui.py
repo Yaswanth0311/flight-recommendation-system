@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
 
 # -----------------------------
 # Load Data
@@ -55,6 +54,14 @@ with col2:
         st.rerun()
 
 # -----------------------------
+# Get Available Date Range
+# -----------------------------
+min_date = df["Date"].min()
+max_date = df["Date"].max()
+
+st.caption(f"📅 Available Dates: {min_date} → {max_date}")
+
+# -----------------------------
 # Filters UI
 # -----------------------------
 col1, col2, col3, col4 = st.columns(4)
@@ -83,6 +90,9 @@ with col3:
 with col4:
     travel_date = st.date_input(
         "Travel Date",
+        value=st.session_state.travel_date,
+        min_value=min_date,
+        max_value=max_date,
         key="travel_date"
     )
 
