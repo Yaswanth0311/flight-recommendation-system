@@ -12,11 +12,12 @@ st.markdown("""
 }
 
 .card {
-    background: rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.08);
     padding: 20px;
     border-radius: 15px;
     margin-bottom: 15px;
     backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
 div.stButton > button {
@@ -26,21 +27,24 @@ div.stButton > button {
     height: 40px;
     width: 180px;
 }
+
+.block-container {
+    padding-top: 2rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------- LOAD DATA ----------------
 df = pd.read_csv("flights.csv")
 
-# Fix Date
 df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.date
 
-# Fix Stops column (VERY IMPORTANT FIX)
+# Fix Stops column
 if "Stops" not in df.columns:
     if "Total_Stops" in df.columns:
         df["Stops"] = df["Total_Stops"]
     else:
-        df["Stops"] = "non-stop"   # fallback
+        df["Stops"] = "non-stop"
 
 # ---------------- TITLE ----------------
 st.title("Flight Recommendation System")
@@ -134,7 +138,7 @@ if search:
         (data["Price"] <= price_range[1])
     ]
 
-    # ---------------- STOPS FILTER ----------------
+    # Stops filter
     if stops == "Non-stop":
         data = data[data["Stops"].astype(str).str.contains("non", case=False)]
     elif stops == "1 Stop":
@@ -142,17 +146,16 @@ if search:
     elif stops == "2+ Stops":
         data = data[data["Stops"].astype(str).str.contains("2|3", case=False)]
 
-    # ---------------- DURATION ----------------
+    # Duration
     def convert_duration(x):
         try:
-            h = int(str(x).split("h")[0])
-            return h
+            return int(str(x).split("h")[0])
         except:
             return 0
 
     data["Duration_Min"] = data["Duration"].apply(convert_duration)
 
-    # ---------------- SORT ----------------
+    # Sorting
     if sort_option == "Cheapest":
         data = data.sort_values("Price")
 
@@ -173,31 +176,26 @@ if search:
 
         st.success("Flights Found")
 
-        for _, row in data.head(10).iterrows():
+        for i, row in data.head(10).iterrows():
 
-            logo_url = logos.get(row["Airline"], "")
+            col1, col2 = st.columns([3,1])
 
-            st.markdown(f"""
-            <div class='card'>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+            with col1:
+                logo_url = logos.get(row["Airline"], "")
 
-                    <div>
-                        <img src="{logo_url}" width="80"><br>
-                        <b>{row['Airline']}</b><br>
-                        {row['Source']} → {row['Destination']}<br>
-                        {row['Duration']} | {row['Stops']}
-                    </div>
-
-                    <div style="text-align:right;">
-                        <h3>₹{row['Price']}</h3>
-                        <button style="background:#ff4b2b;color:white;border:none;padding:8px 15px;border-radius:6px;">
-                            Book Now
-                        </button>
-                    </div>
-
+                st.markdown(f"""
+                <div class='card'>
+                    <img src="{logo_url}" width="80"><br><br>
+                    <b>{row['Airline']}</b><br>
+                    {row['Source']} → {row['Destination']}<br>
+                    {row['Duration']} | {row['Stops']}
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+
+            with col2:
+                st.markdown(f"### ₹{row['Price']}")
+                if st.button(f"Book Now {i}"):
+                    st.success("Booking Successful (Demo)")
 
     else:
         st.error("No flights found")
