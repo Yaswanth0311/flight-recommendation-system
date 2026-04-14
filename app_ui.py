@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
 
 # -----------------------------
 # CONFIG
@@ -20,135 +19,175 @@ if "recent_searches" not in st.session_state:
     st.session_state.recent_searches = []
 
 # -----------------------------
+# CSS (MAKE MY TRIP STYLE)
+# -----------------------------
+st.markdown("""
+<style>
+body {
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+}
+
+.main-card {
+    background: rgba(255,255,255,0.05);
+    padding:25px;
+    border-radius:15px;
+    backdrop-filter: blur(10px);
+}
+
+.stButton>button {
+    background: linear-gradient(90deg, #ff416c, #ff4b2b);
+    color: white;
+    border-radius:10px;
+    padding:10px 24px;
+    font-weight:600;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
 # HEADER
 # -----------------------------
 st.title("Flight Recommendation System")
 st.write("Smart AI-based Flight Finder")
 
 # -----------------------------
-# ANALYTICS
+# NAVIGATION TABS
 # -----------------------------
-c1, c2, c3 = st.columns(3)
+tab1, tab2, tab3 = st.tabs(["✈ Flights", "🏨 Hotels", "🚆 Trains"])
 
-c1.metric("Flights", len(df))
-c2.metric("Avg Price", f"₹{int(df['Price'].mean())}")
-c3.metric("Airlines", df["Airline"].nunique())
+with tab1:
 
-st.write("---")
+    st.markdown("<div class='main-card'>", unsafe_allow_html=True)
 
-# -----------------------------
-# FILTERS
-# -----------------------------
-col1, col2, col3, col4, col5 = st.columns(5)
+    # -----------------------------
+    # FILTERS
+    # -----------------------------
+    col1, col2, col3, col4, col5 = st.columns(5)
 
-sources = ["Select"] + sorted(df["Source"].unique())
-destinations = ["Select"] + sorted(df["Destination"].unique())
+    sources = ["Select"] + sorted(df["Source"].unique())
+    destinations = ["Select"] + sorted(df["Destination"].unique())
 
-# Initialize session values
-if "source" not in st.session_state:
-    st.session_state.source = "Select"
-if "destination" not in st.session_state:
-    st.session_state.destination = "Select"
+    if "source" not in st.session_state:
+        st.session_state.source = "Select"
+    if "destination" not in st.session_state:
+        st.session_state.destination = "Select"
 
-# -----------------------------
-# SWAP BUTTON
-# -----------------------------
-def swap():
-    st.session_state.source, st.session_state.destination = (
-        st.session_state.destination,
-        st.session_state.source,
+    def swap():
+        st.session_state.source, st.session_state.destination = (
+            st.session_state.destination,
+            st.session_state.source,
+        )
+
+    source = col1.selectbox("From", sources, key="source")
+    destination = col2.selectbox("To", destinations, key="destination")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    col2.button("🔁 Swap", on_click=swap)
+
+    airline = col3.selectbox("Airline", ["Select"] + sorted(df["Airline"].unique()))
+    sort = col4.selectbox("Sort By", ["Select", "Cheapest", "Premium", "Fastest", "Best"])
+
+    date_list = ["Select"] + sorted(df["Date"].astype(str).unique())
+    selected_date = col5.selectbox("Travel Date", date_list)
+
+    # -----------------------------
+    # PRICE
+    # -----------------------------
+    price_range = st.slider(
+        "Price Range",
+        int(df["Price"].min()),
+        int(df["Price"].max()),
+        (2000, 15000)
     )
 
-# -----------------------------
-# INPUTS
-# -----------------------------
-source = col1.selectbox("From", sources, key="source")
-destination = col2.selectbox("To", destinations, key="destination")
+    # -----------------------------
+    # SEARCH BUTTON
+    # -----------------------------
+    is_valid = source != "Select" and destination != "Select"
 
-col2.button("🔁", on_click=swap)
+    search = st.button("🔍 Search Flights", disabled=not is_valid)
 
-airline = col3.selectbox("Airline", ["Select"] + sorted(df["Airline"].unique()))
-sort = col4.selectbox("Sort By", ["Select", "Cheapest", "Premium", "Fastest", "Best"])
+    if not is_valid:
+        st.warning("Select From & To")
 
-# DATE SELECT
-date_list = ["Select"] + sorted(df["Date"].astype(str).unique())
-selected_date = col5.selectbox("Travel Date", date_list)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# -----------------------------
-# PRICE RANGE
-# -----------------------------
-price_range = st.slider(
-    "Price Range",
-    int(df["Price"].min()),
-    int(df["Price"].max()),
-    (2000, 15000)
-)
+    # -----------------------------
+    # RESULTS
+    # -----------------------------
+    if search:
 
-# -----------------------------
-# DISABLE SEARCH BUTTON
-# -----------------------------
-is_valid = source != "Select" and destination != "Select"
+        data = df.copy()
 
-search = st.button("Search Flights", disabled=not is_valid)
+        if source != "Select":
+            data = data[data["Source"] == source]
 
-if not is_valid:
-    st.warning("Please select From and To locations")
+        if destination != "Select":
+            data = data[data["Destination"] == destination]
 
-# -----------------------------
-# FILTER LOGIC
-# -----------------------------
-if search:
+        if airline != "Select":
+            data = data[data["Airline"] == airline]
 
-    data = df.copy()
+        if selected_date != "Select":
+            data = data[data["Date"].astype(str) == selected_date]
 
-    if source != "Select":
-        data = data[data["Source"] == source]
+        data = data[
+            (data["Price"] >= price_range[0]) &
+            (data["Price"] <= price_range[1])
+        ]
 
-    if destination != "Select":
-        data = data[data["Destination"] == destination]
+        if sort == "Cheapest":
+            data = data.sort_values("Price")
+        elif sort == "Premium":
+            data = data.sort_values("Price", ascending=False)
 
-    if airline != "Select":
-        data = data[data["Airline"] == airline]
+        st.success("Flights Found")
 
-    if selected_date != "Select":
-        data = data[data["Date"].astype(str) == selected_date]
+        # SAVE RECENT
+        st.session_state.recent_searches.insert(0, f"{source} → {destination}")
+        st.session_state.recent_searches = st.session_state.recent_searches[:5]
 
-    data = data[
-        (data["Price"] >= price_range[0]) &
-        (data["Price"] <= price_range[1])
-    ]
+        for i, row in data.head(8).iterrows():
 
-    # SORTING
-    if sort == "Cheapest":
-        data = data.sort_values("Price")
-    elif sort == "Premium":
-        data = data.sort_values("Price", ascending=False)
-    elif sort == "Fastest":
-        data = data.sort_values("Duration")
-    elif sort == "Best":
-        data = data.sort_values(["Price", "Duration"])
+            st.markdown(f"""
+            <div style="
+                background: rgba(255,255,255,0.05);
+                padding:20px;
+                border-radius:12px;
+                margin-bottom:10px;
+            ">
+                <b>{row['Airline']}</b><br>
+                {row['Source']} → {row['Destination']}<br>
+                {row['Duration']} | {row['Stops']}<br>
+                <h3>₹{row['Price']}</h3>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # SAVE RECENT SEARCH
-    st.session_state.recent_searches.insert(0, f"{source} → {destination}")
-    st.session_state.recent_searches = st.session_state.recent_searches[:5]
+    # -----------------------------
+    # RECENT SEARCHES
+    # -----------------------------
+    if st.session_state.recent_searches:
+        st.write("### 🕘 Recent Searches")
 
-    st.success("Flights Found")
+        cols = st.columns(len(st.session_state.recent_searches))
 
-    for i, row in data.head(10).iterrows():
-        st.subheader(f"{row['Airline']} | {row['Source']} → {row['Destination']}")
-        st.write(f"{row['Duration']} | {row['Stops']}")
-        st.write(f"₹{row['Price']}")
-
-        if st.button("Book Now", key=i):
-            st.success("Flight booked!")
-
-        st.write("---")
+        for i, item in enumerate(st.session_state.recent_searches):
+            cols[i].markdown(f"""
+            <div style="
+                background: rgba(255,255,255,0.05);
+                padding:10px;
+                border-radius:8px;
+                text-align:center;
+            ">
+                {item}
+            </div>
+            """, unsafe_allow_html=True)
 
 # -----------------------------
-# RECENT SEARCHES
+# OTHER TABS (PLACEHOLDER)
 # -----------------------------
-if st.session_state.recent_searches:
-    st.write("### 🕘 Recent Searches")
+with tab2:
+    st.info("Hotel booking coming soon")
 
-    for item in st.session_state.recent_searches:
-        st.write(f"• {item}")
+with tab3:
+    st.info("Train booking coming soon")
