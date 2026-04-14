@@ -7,27 +7,21 @@ import pandas as pd
 st.set_page_config(page_title="Flight App", layout="wide")
 
 # -----------------------------
-# CSS (PRO UI)
+# CSS
 # -----------------------------
 st.markdown("""
 <style>
-body {
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    color: white;
-}
-
 .card {
     background: rgba(255,255,255,0.05);
     padding:20px;
-    border-radius:15px;
+    border-radius:12px;
     margin-bottom:15px;
-    backdrop-filter: blur(10px);
 }
 
 .metric {
     background: rgba(255,255,255,0.05);
     padding:15px;
-    border-radius:12px;
+    border-radius:10px;
     text-align:center;
 }
 
@@ -45,6 +39,7 @@ body {
 # -----------------------------
 df = pd.read_csv("flights.csv")
 
+# Fix missing columns
 if "Stops" not in df.columns:
     df["Stops"] = "non-stop"
 
@@ -89,11 +84,11 @@ st.write("Smart AI-based Flight Finder")
 # -----------------------------
 # ANALYTICS
 # -----------------------------
-col1, col2, col3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 
-col1.markdown(f"<div class='metric'>Total Flights<br><h2>{len(df)}</h2></div>", unsafe_allow_html=True)
-col2.markdown(f"<div class='metric'>Avg Price<br><h2>₹{int(df['Price'].mean())}</h2></div>", unsafe_allow_html=True)
-col3.markdown(f"<div class='metric'>Airlines<br><h2>{df['Airline'].nunique()}</h2></div>", unsafe_allow_html=True)
+c1.markdown(f"<div class='metric'>Flights<br><h2>{len(df)}</h2></div>", unsafe_allow_html=True)
+c2.markdown(f"<div class='metric'>Avg Price<br><h2>₹{int(df['Price'].mean())}</h2></div>", unsafe_allow_html=True)
+c3.markdown(f"<div class='metric'>Airlines<br><h2>{df['Airline'].nunique()}</h2></div>", unsafe_allow_html=True)
 
 st.write("---")
 
@@ -105,9 +100,14 @@ col1, col2, col3, col4 = st.columns(4)
 source = col1.selectbox("From", ["Select"] + sorted(df["Source"].unique()))
 destination = col2.selectbox("To", ["Select"] + sorted(df["Destination"].unique()))
 airline = col3.selectbox("Airline", ["All"] + sorted(df["Airline"].unique()))
-sort = col4.selectbox("Sort By", ["Cheapest", "Fastest", "Best Value", "Premium"])
+sort = col4.selectbox("Sort By", ["Cheapest", "Fastest", "Premium"])
 
-price_range = st.slider("Price Range", int(df["Price"].min()), int(df["Price"].max()), (2000, 15000))
+price_range = st.slider(
+    "Price Range",
+    int(df["Price"].min()),
+    int(df["Price"].max()),
+    (2000, 15000)
+)
 
 st.write("")
 
@@ -128,20 +128,21 @@ if search:
     if airline != "All":
         data = data[data["Airline"] == airline]
 
-    data = data[(data["Price"] >= price_range[0]) & (data["Price"] <= price_range[1])]
+    data = data[
+        (data["Price"] >= price_range[0]) &
+        (data["Price"] <= price_range[1])
+    ]
 
-    # SORT
+    # SORTING
     if sort == "Cheapest":
         data = data.sort_values("Price")
-    elif sort == "Fastest":
-        data = data.sort_values("Duration")
     elif sort == "Premium":
         data = data.sort_values("Price", ascending=False)
 
     st.success("Flights Found")
 
     # -----------------------------
-    # CARDS (FIXED HTML)
+    # CARDS (IMPORTANT FIX HERE)
     # -----------------------------
     for i, row in data.head(20).iterrows():
 
@@ -176,9 +177,8 @@ if search:
         </div>
         """, unsafe_allow_html=True)
 
-        # BOOK BUTTON
         if st.button("Book Now", key=f"book_{i}"):
-            st.success(f"{row['Airline']} booked at ₹{final_price} ✈️")
+            st.success(f"{row['Airline']} booked at ₹{final_price}")
 
 else:
     st.info("Select filters and click Search Flights")
