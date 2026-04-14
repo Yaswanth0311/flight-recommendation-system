@@ -7,7 +7,7 @@ import pandas as pd
 st.set_page_config(page_title="Flight App", layout="wide")
 
 # -----------------------------
-# CSS (Professional UI)
+# CSS (PRO UI)
 # -----------------------------
 st.markdown("""
 <style>
@@ -45,7 +45,6 @@ body {
 # -----------------------------
 df = pd.read_csv("flights.csv")
 
-# Safe defaults if missing
 if "Stops" not in df.columns:
     df["Stops"] = "non-stop"
 
@@ -88,7 +87,7 @@ st.title("Flight Recommendation System")
 st.write("Smart AI-based Flight Finder")
 
 # -----------------------------
-# ANALYTICS (TOP CARDS)
+# ANALYTICS
 # -----------------------------
 col1, col2, col3 = st.columns(3)
 
@@ -131,7 +130,7 @@ if search:
 
     data = data[(data["Price"] >= price_range[0]) & (data["Price"] <= price_range[1])]
 
-    # Sorting
+    # SORT
     if sort == "Cheapest":
         data = data.sort_values("Price")
     elif sort == "Fastest":
@@ -142,7 +141,7 @@ if search:
     st.success("Flights Found")
 
     # -----------------------------
-    # RESULTS (CARDS)
+    # CARDS (FIXED HTML)
     # -----------------------------
     for i, row in data.head(20).iterrows():
 
@@ -177,6 +176,7 @@ if search:
         </div>
         """, unsafe_allow_html=True)
 
+        # BOOK BUTTON
         if st.button("Book Now", key=f"book_{i}"):
             st.success(f"{row['Airline']} booked at ₹{final_price} ✈️")
 
