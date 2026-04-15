@@ -1,110 +1,120 @@
 import streamlit as st
 import pandas as pd
-import pickle
-from db import create_tables
-from auth import login, signup
-from booking import save_booking
 
-# Init DB
-create_tables()
+# -------------------- CONFIG --------------------
+st.set_page_config(page_title="Flight Recommendation System", layout="wide")
 
-# Load data
-data = pd.read_csv("flights.csv")
+# -------------------- LOAD DATA --------------------
+@st.cache_data
+def load_data():
+    return pd.read_csv("flights.csv")
 
-# Load model
-model, columns = pickle.load(open("model.pkl", "rb"))
+data = load_data()
 
-st.set_page_config(page_title="Flight App", layout="wide")
+# -------------------- TITLE --------------------
+st.markdown("## ✈️ Flight Recommendation System")
+st.caption("Smart AI-based Flight Finder")
 
-# SESSION
-if "user" not in st.session_state:
-    st.session_state.user = None
+# -------------------- FILTER UI --------------------
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-# ---------------- LOGIN ----------------
-if st.session_state.user is None:
+with col1:
+    source = st.selectbox("From", ["Select All"] + sorted(data["Source"].unique()))
 
-    st.title("🔐 Login / Signup")
+with col2:
+    destination = st.selectbox("To", ["Select All"] + sorted(data["Destination"].unique()))
 
-    tab1, tab2 = st.tabs(["Login", "Signup"])
+with col3:
+    airline = st.selectbox("Airline", ["Select All"] + sorted(data["Airline"].unique()))
 
-    with tab1:
-        user = st.text_input("Username")
-        pwd = st.text_input("Password", type="password")
+with col4:
+    sort_by = st.selectbox("Sort By", ["Select", "Cheapest", "Premium"])
 
-        if st.button("Login"):
-            if login(user, pwd):
-                st.session_state.user = user
-                st.success("Logged in")
-                st.rerun()
-            else:
-                st.error("Invalid credentials")
+with col5:
+    travel_date = st.date_input("Travel Date")
 
-    with tab2:
-        new_user = st.text_input("New Username")
-        new_pwd = st.text_input("New Password", type="password")
+with col6:
+    clear = st.button("❌ Clear")
 
-        if st.button("Signup"):
-            signup(new_user, new_pwd)
-            st.success("Account created")
+# -------------------- CLEAR FILTER --------------------
+if clear:
+    st.experimental_rerun()
 
-# ---------------- MAIN APP ----------------
-else:
-    st.title("✈️ Flight Recommendation System")
+# -------------------- PRICE SLIDER --------------------
+price_min, price_max = int(data["Price"].min()), int(data["Price"].max())
 
-    st.write(f"Welcome, {st.session_state.user}")
+price = st.slider(
+    "Price Range",
+    price_min,
+    price_max,
+    (price_min, price_max)
+)
 
-    # Filters
-    col1, col2, col3 = st.columns(3)
+# -------------------- SEARCH BUTTON --------------------
+search_clicked = st.button("🔍 Search Flights")
 
-    with col1:
-        source = st.selectbox("From", data["Source"].unique())
+# -------------------- FILTER LOGIC --------------------
+filtered_data = data.copy()
 
-    with col2:
-        dest = st.selectbox("To", data["Destination"].unique())
+if source != "Select All":
+    filtered_data = filtered_data[filtered_data["Source"] == source]
 
-    with col3:
-        airline = st.selectbox("Airline", data["Airline"].unique())
+if destination != "Select All":
+    filtered_data = filtered_data[filtered_data["Destination"] == destination]
 
-    price_range = st.slider("Max Price", 1000, 20000, 10000)
+if airline != "Select All":
+    filtered_data = filtered_data[filtered_data["Airline"] == airline]
 
-    # Search
-    if st.button("Search Flights"):
+filtered_data = filtered_data[
+    (filtered_data["Price"] >= price[0]) &
+    (filtered_data["Price"] <= price[1])
+]
 
-        df = data[
-            (data["Source"] == source) &
-            (data["Destination"] == dest) &
-            (data["Price"] <= price_range)
-        ]
+# -------------------- SORT --------------------
+if sort_by == "Cheapest":
+    filtered_data = filtered_data.sort_values(by="Price")
 
-        st.success("Flights Found")
+elif sort_by == "Premium":
+    filtered_data = filtered_data.sort_values(by="Price", ascending=False)
 
-        for i, row in df.head(5).iterrows():
+# -------------------- VALIDATION --------------------
+if source == "Select All" or destination == "Select All":
+    st.warning("⚠️ Please select From & To locations")
 
-            # ML Prediction
-            input_df = pd.DataFrame([row[["Airline","Source","Destination","Duration","Total_Stops"]]])
-            input_df = pd.get_dummies(input_df).reindex(columns=columns, fill_value=0)
+# -------------------- RESULTS --------------------
+if search_clicked:
 
-            predicted_price = int(model.predict(input_df)[0])
+    if filtered_data.empty:
+        st.error("❌ No flights found")
+
+    else:
+        st.success("✅ Flights Found")
+
+        for i, row in filtered_data.head(10).iterrows():
+
+            duration = row["Duration"] if "Duration" in data.columns else "N/A"
+            stops = row["Stops"] if "Stops" in data.columns else row.get("Total_Stops", "N/A")
 
             st.markdown(f"""
-            ### {row['Airline']}
-            {row['Source']} → {row['Destination']}  
-            💰 Actual: ₹{row['Price']}  
-            🤖 Predicted: ₹{predicted_price}
-            """)
+            <div style="
+                background: rgba(255,255,255,0.05);
+                padding:20px;
+                border-radius:12px;
+                margin-bottom:12px;
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+            ">
 
-            if st.button(f"Book {i}"):
+                <div>
+                    <h4 style="margin:0;">{row['Airline']}</h4>
+                    <p style="margin:0;">{row['Source']} → {row['Destination']}</p>
+                    <p style="margin:0;">{duration} | {stops}</p>
+                </div>
 
-                save_booking(
-                    st.session_state.user,
-                    row["Source"],
-                    row["Destination"],
-                    row["Price"],
-                    "2026-04-20"
-                )
+                <div style="text-align:right;">
+                    <h2 style="margin:0;">₹{int(row['Price'])}</h2>
+                </div>
 
-                st.success("Booking saved!")
-
-    if st.button("Logout"):
-        st.session_state.user = None
-        st.rerun()
+            </div>
+            """, unsafe_allow_html=True)
