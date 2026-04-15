@@ -1,179 +1,110 @@
 import streamlit as st
 import pandas as pd
-import random
+import pickle
+from db import create_tables
+from auth import login, signup
+from booking import save_booking
 
-st.set_page_config(page_title="Flight Booking App", layout="wide")
+# Init DB
+create_tables()
 
-# -----------------------------
-# LOAD DATA
-# -----------------------------
-df = pd.read_csv("flights.csv")
+# Load data
+data = pd.read_csv("flights.csv")
 
-if "Date" in df.columns:
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+# Load model
+model, columns = pickle.load(open("model.pkl", "rb"))
 
-# -----------------------------
-# SESSION STATE
-# -----------------------------
-if "recent" not in st.session_state:
-    st.session_state.recent = []
+st.set_page_config(page_title="Flight App", layout="wide")
 
-if "booking" not in st.session_state:
-    st.session_state.booking = None
+# SESSION
+if "user" not in st.session_state:
+    st.session_state.user = None
 
-# -----------------------------
-# CLEAR FILTERS
-# -----------------------------
-def clear_filters():
-    st.session_state.source = "Select All"
-    st.session_state.destination = "Select All"
-    st.session_state.airline = "Select All"
+# ---------------- LOGIN ----------------
+if st.session_state.user is None:
 
-# -----------------------------
-# AIRLINE LOGOS
-# -----------------------------
-logos = {
-    "IndiGo": "https://1000logos.net/wp-content/uploads/2020/03/IndiGo-logo.png",
-    "Air India": "https://1000logos.net/wp-content/uploads/2020/03/Air-India-logo.png",
-    "SpiceJet": "https://1000logos.net/wp-content/uploads/2020/03/SpiceJet-logo.png",
-    "Vistara": "https://1000logos.net/wp-content/uploads/2021/04/Vistara-logo.png",
-    "GoAir": "https://upload.wikimedia.org/wikipedia/commons/8/8e/Go_First_logo.svg"
-}
+    st.title("🔐 Login / Signup")
 
-# -----------------------------
-# HEADER
-# -----------------------------
-st.title("✈ Flight Booking App")
-st.caption("Production Level AI Flight Finder")
+    tab1, tab2 = st.tabs(["Login", "Signup"])
 
-# -----------------------------
-# DASHBOARD
-# -----------------------------
-col1, col2, col3 = st.columns(3)
+    with tab1:
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
 
-col1.metric("Flights", len(df))
-col2.metric("Avg Price", f"₹{int(df['Price'].mean())}")
-col3.metric("Airlines", df["Airline"].nunique())
+        if st.button("Login"):
+            if login(user, pwd):
+                st.session_state.user = user
+                st.success("Logged in")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
 
-st.divider()
+    with tab2:
+        new_user = st.text_input("New Username")
+        new_pwd = st.text_input("New Password", type="password")
 
-# -----------------------------
-# FILTERS
-# -----------------------------
-sources = ["Select All"] + sorted(df["Source"].unique())
-destinations = ["Select All"] + sorted(df["Destination"].unique())
-airlines = ["Select All"] + sorted(df["Airline"].unique())
+        if st.button("Signup"):
+            signup(new_user, new_pwd)
+            st.success("Account created")
 
-c1, c2, c3, c4 = st.columns(4)
+# ---------------- MAIN APP ----------------
+else:
+    st.title("✈️ Flight Recommendation System")
 
-source = c1.selectbox("From", sources, key="source")
-destination = c2.selectbox("To", destinations, key="destination")
-airline = c3.selectbox("Airline", airlines, key="airline")
+    st.write(f"Welcome, {st.session_state.user}")
 
-if c4.button("🔄 Swap"):
-    st.session_state.source, st.session_state.destination = destination, source
+    # Filters
+    col1, col2, col3 = st.columns(3)
 
-st.button("❌ Clear Filters", on_click=clear_filters)
+    with col1:
+        source = st.selectbox("From", data["Source"].unique())
 
-# -----------------------------
-# PRICE FILTER
-# -----------------------------
-price_range = st.slider(
-    "Price Range",
-    int(df["Price"].min()),
-    int(df["Price"].max()),
-    (2000, 15000)
-)
+    with col2:
+        dest = st.selectbox("To", data["Destination"].unique())
 
-# -----------------------------
-# SEARCH
-# -----------------------------
-valid = source != "Select All" and destination != "Select All"
+    with col3:
+        airline = st.selectbox("Airline", data["Airline"].unique())
 
-search = st.button("🔍 Search Flights", disabled=not valid)
+    price_range = st.slider("Max Price", 1000, 20000, 10000)
 
-# -----------------------------
-# RESULTS
-# -----------------------------
-if search:
+    # Search
+    if st.button("Search Flights"):
 
-    data = df.copy()
+        df = data[
+            (data["Source"] == source) &
+            (data["Destination"] == dest) &
+            (data["Price"] <= price_range)
+        ]
 
-    if source != "Select All":
-        data = data[data["Source"] == source]
+        st.success("Flights Found")
 
-    if destination != "Select All":
-        data = data[data["Destination"] == destination]
+        for i, row in df.head(5).iterrows():
 
-    if airline != "Select All":
-        data = data[data["Airline"] == airline]
+            # ML Prediction
+            input_df = pd.DataFrame([row[["Airline","Source","Destination","Duration","Total_Stops"]]])
+            input_df = pd.get_dummies(input_df).reindex(columns=columns, fill_value=0)
 
-    data = data[
-        (data["Price"] >= price_range[0]) &
-        (data["Price"] <= price_range[1])
-    ]
+            predicted_price = int(model.predict(input_df)[0])
 
-    st.success("Flights Found")
+            st.markdown(f"""
+            ### {row['Airline']}
+            {row['Source']} → {row['Destination']}  
+            💰 Actual: ₹{row['Price']}  
+            🤖 Predicted: ₹{predicted_price}
+            """)
 
-    st.session_state.recent.insert(0, f"{source} → {destination}")
-    st.session_state.recent = st.session_state.recent[:5]
+            if st.button(f"Book {i}"):
 
-    for i, row in data.head(10).iterrows():
+                save_booking(
+                    st.session_state.user,
+                    row["Source"],
+                    row["Destination"],
+                    row["Price"],
+                    "2026-04-20"
+                )
 
-        duration = row.get("Duration", "N/A")
-        stops = row.get("Stops", row.get("Total_Stops", "N/A"))
+                st.success("Booking saved!")
 
-        logo = logos.get(row["Airline"], "")
-
-        col_left, col_mid, col_right = st.columns([1, 4, 2])
-
-        # Logo
-        with col_left:
-            if logo:
-                st.image(logo, width=60)
-
-        # Details
-        with col_mid:
-            st.markdown(f"### {row['Airline']}")
-            st.write(f"{row['Source']} → {row['Destination']}")
-            st.caption(f"{duration} | {stops}")
-
-        # Price + Booking
-        with col_right:
-            st.markdown(
-                f"<h3 style='text-align:right;'>₹{int(row['Price'])}</h3>",
-                unsafe_allow_html=True
-            )
-
-            if st.button(f"Book Now {i}"):
-                st.session_state.booking = row
-
-        st.divider()
-
-# -----------------------------
-# BOOKING FLOW
-# -----------------------------
-if st.session_state.booking is not None:
-
-    st.subheader("💳 Booking Summary")
-
-    flight = st.session_state.booking
-
-    st.write(f"**Airline:** {flight['Airline']}")
-    st.write(f"**Route:** {flight['Source']} → {flight['Destination']}")
-    st.write(f"**Price:** ₹{int(flight['Price'])}")
-
-    if st.button("💰 Pay Now"):
-        st.success("✅ Payment Successful! Ticket Booked 🎉")
-        st.session_state.booking = None
-
-# -----------------------------
-# RECENT SEARCHES
-# -----------------------------
-if st.session_state.recent:
-    st.subheader("🕘 Recent Searches")
-
-    cols = st.columns(len(st.session_state.recent))
-
-    for i, item in enumerate(st.session_state.recent):
-        cols[i].info(item)
+    if st.button("Logout"):
+        st.session_state.user = None
+        st.rerun()
