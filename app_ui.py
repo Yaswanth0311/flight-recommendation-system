@@ -1,120 +1,155 @@
 import streamlit as st
 import pandas as pd
 
-# -------------------- CONFIG --------------------
 st.set_page_config(page_title="Flight Recommendation System", layout="wide")
 
-# -------------------- LOAD DATA --------------------
-@st.cache_data
-def load_data():
-    return pd.read_csv("flights.csv")
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+df = pd.read_csv("flights.csv")
 
-data = load_data()
+# Safe handling
+if "Date" in df.columns:
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-# -------------------- TITLE --------------------
-st.markdown("## ✈️ Flight Recommendation System")
+# -----------------------------
+# DEFAULT SESSION VALUES
+# -----------------------------
+if "source" not in st.session_state:
+    st.session_state.source = "Select All"
+
+if "destination" not in st.session_state:
+    st.session_state.destination = "Select All"
+
+if "airline" not in st.session_state:
+    st.session_state.airline = "Select All"
+
+if "sort" not in st.session_state:
+    st.session_state.sort = "Select"
+
+if "date" not in st.session_state:
+    st.session_state.date = "Select All"
+
+# -----------------------------
+# CLEAR FILTERS
+# -----------------------------
+def clear_filters():
+    st.session_state.source = "Select All"
+    st.session_state.destination = "Select All"
+    st.session_state.airline = "Select All"
+    st.session_state.sort = "Select"
+    st.session_state.date = "Select All"
+
+# -----------------------------
+# HEADER
+# -----------------------------
+st.title("Flight Recommendation System")
 st.caption("Smart AI-based Flight Finder")
 
-# -------------------- FILTER UI --------------------
+# -----------------------------
+# FILTER UI
+# -----------------------------
+sources = ["Select All"] + sorted(df["Source"].dropna().unique())
+destinations = ["Select All"] + sorted(df["Destination"].dropna().unique())
+airlines = ["Select All"] + sorted(df["Airline"].dropna().unique())
+
+dates = ["Select All"]
+if "Date" in df.columns:
+    dates += sorted(df["Date"].dropna().astype(str).unique())
+
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-with col1:
-    source = st.selectbox("From", ["Select All"] + sorted(data["Source"].unique()))
+source = col1.selectbox("From", sources, key="source")
+destination = col2.selectbox("To", destinations, key="destination")
+airline = col3.selectbox("Airline", airlines, key="airline")
+sort = col4.selectbox("Sort By", ["Select", "Cheapest", "Premium"], key="sort")
+selected_date = col5.selectbox("Travel Date", dates, key="date")
 
-with col2:
-    destination = st.selectbox("To", ["Select All"] + sorted(data["Destination"].unique()))
+col6.button("❌ Clear", on_click=clear_filters)
 
-with col3:
-    airline = st.selectbox("Airline", ["Select All"] + sorted(data["Airline"].unique()))
+# -----------------------------
+# PRICE SLIDER
+# -----------------------------
+min_price = int(df["Price"].min())
+max_price = int(df["Price"].max())
 
-with col4:
-    sort_by = st.selectbox("Sort By", ["Select", "Cheapest", "Premium"])
-
-with col5:
-    travel_date = st.date_input("Travel Date")
-
-with col6:
-    clear = st.button("❌ Clear")
-
-# -------------------- CLEAR FILTER --------------------
-if clear:
-    st.experimental_rerun()
-
-# -------------------- PRICE SLIDER --------------------
-price_min, price_max = int(data["Price"].min()), int(data["Price"].max())
-
-price = st.slider(
+price_range = st.slider(
     "Price Range",
-    price_min,
-    price_max,
-    (price_min, price_max)
+    min_price,
+    max_price,
+    (min_price, max_price)
 )
 
-# -------------------- SEARCH BUTTON --------------------
-search_clicked = st.button("🔍 Search Flights")
+# -----------------------------
+# SEARCH BUTTON
+# -----------------------------
+valid = source != "Select All" and destination != "Select All"
 
-# -------------------- FILTER LOGIC --------------------
-filtered_data = data.copy()
+search = st.button("🔍 Search Flights", disabled=not valid)
 
-if source != "Select All":
-    filtered_data = filtered_data[filtered_data["Source"] == source]
+if not valid:
+    st.warning("Please select From & To locations")
 
-if destination != "Select All":
-    filtered_data = filtered_data[filtered_data["Destination"] == destination]
+# -----------------------------
+# SEARCH LOGIC
+# -----------------------------
+if search:
 
-if airline != "Select All":
-    filtered_data = filtered_data[filtered_data["Airline"] == airline]
+    data = df.copy()
 
-filtered_data = filtered_data[
-    (filtered_data["Price"] >= price[0]) &
-    (filtered_data["Price"] <= price[1])
-]
+    if source != "Select All":
+        data = data[data["Source"] == source]
 
-# -------------------- SORT --------------------
-if sort_by == "Cheapest":
-    filtered_data = filtered_data.sort_values(by="Price")
+    if destination != "Select All":
+        data = data[data["Destination"] == destination]
 
-elif sort_by == "Premium":
-    filtered_data = filtered_data.sort_values(by="Price", ascending=False)
+    if airline != "Select All":
+        data = data[data["Airline"] == airline]
 
-# -------------------- VALIDATION --------------------
-if source == "Select All" or destination == "Select All":
-    st.warning("⚠️ Please select From & To locations")
+    if selected_date != "Select All" and "Date" in data.columns:
+        data = data[data["Date"].astype(str) == selected_date]
 
-# -------------------- RESULTS --------------------
-if search_clicked:
+    # Price filter
+    data = data[
+        (data["Price"] >= price_range[0]) &
+        (data["Price"] <= price_range[1])
+    ]
 
-    if filtered_data.empty:
-        st.error("❌ No flights found")
+    # Sorting
+    if sort == "Cheapest":
+        data = data.sort_values("Price")
+    elif sort == "Premium":
+        data = data.sort_values("Price", ascending=False)
 
-    else:
-        st.success("✅ Flights Found")
+    st.success("Flights Found")
 
-        for i, row in filtered_data.head(10).iterrows():
+    # -----------------------------
+    # DISPLAY CARDS (NO HTML BUG)
+    # -----------------------------
+    for i, row in data.head(10).iterrows():
 
-            duration = row["Duration"] if "Duration" in data.columns else "N/A"
-            stops = row["Stops"] if "Stops" in data.columns else row.get("Total_Stops", "N/A")
+        duration = row["Duration"] if "Duration" in data.columns else "N/A"
 
-            st.markdown(f"""
-            <div style="
-                background: rgba(255,255,255,0.05);
-                padding:20px;
-                border-radius:12px;
-                margin-bottom:12px;
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-            ">
+        if "Stops" in data.columns:
+            stops = row["Stops"]
+        else:
+            stops = row.get("Total_Stops", "N/A")
 
-                <div>
-                    <h4 style="margin:0;">{row['Airline']}</h4>
-                    <p style="margin:0;">{row['Source']} → {row['Destination']}</p>
-                    <p style="margin:0;">{duration} | {stops}</p>
-                </div>
+        # Layout columns instead of HTML (100% safe)
+        left, right = st.columns([4, 1])
 
-                <div style="text-align:right;">
-                    <h2 style="margin:0;">₹{int(row['Price'])}</h2>
-                </div>
+        with left:
+            st.markdown(f"### {row['Airline']}")
+            st.write(f"{row['Source']} → {row['Destination']}")
+            st.caption(f"{duration} | {stops}")
 
-            </div>
-            """, unsafe_allow_html=True)
+        with right:
+            st.markdown(
+                f"<h3 style='text-align:right;'>₹{int(row['Price'])}</h3>",
+                unsafe_allow_html=True
+            )
+
+        st.divider()
+
+else:
+    st.info("Select filters and click Search Flights")
